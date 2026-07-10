@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dropy Pass-Funnel Validator</title>
+  <style>
+    :root { --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --panel3:#273252; --line2:#2b3652;
+      --txt:#e6ecff; --muted:#9fb0d6; --grad:linear-gradient(135deg,#5b8cff,#7a5bff); }
+    * { box-sizing:border-box; }
+    body { margin:0; font:13px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+    header { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line2); }
+    header b { font-size:14px; }
+    .pill { margin-left:auto; font-size:11px; padding:3px 9px; border-radius:999px; background:var(--panel3); color:var(--muted); }
+    .pill.run { background:rgba(91,140,255,.25); color:#bcd0ff; }
+    .pill.paused { background:rgba(250,204,21,.2); color:#fde68a; }
+    .pill.captcha { background:rgba(248,113,113,.2); color:#fecaca; }
+    nav { display:flex; border-bottom:1px solid var(--line2); }
+    nav button { flex:1; background:none; border:none; color:var(--muted); padding:9px; cursor:pointer; font-size:12px; }
+    nav button.active { color:var(--txt); box-shadow:inset 0 -2px 0 #5b8cff; }
+    main { padding:12px; }
+    section.tab { display:none; } section.tab.active { display:block; }
+    .btnrow { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+    button.act { background:var(--panel2); color:var(--txt); border:1px solid var(--line2); border-radius:8px;
+      padding:8px 12px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; }
+    button.act:hover { background:var(--panel3); }
+    button.act.primary { background:var(--grad); border:none; color:#fff; flex:1; justify-content:center; }
+    button.act.danger:hover { background:rgba(248,113,113,.15); border-color:rgba(248,113,113,.4); }
+    button.act.mini { font-size:11px; padding:6px 9px; }
+    button.act:disabled { opacity:.4; cursor:not-allowed; }
+    .card { background:var(--panel); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+    .card h3 { margin:0 0 8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; }
+    .kv .k { color:var(--muted); } .kv .v { text-align:right; } .mono { font-family:ui-monospace,Menlo,monospace; }
+    .chips { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    .chip { display:flex; justify-content:space-between; background:var(--panel2); border-radius:8px; padding:6px 9px; }
+    .chip .num { font-weight:700; } .num.ok{color:#86efac} .num.warn{color:#fde68a} .num.rs{color:#93c5fd} .num.dp{color:#c4b5fd}
+    label.toggle { display:flex; align-items:center; gap:7px; margin:8px 0; color:var(--muted); }
+    .field { margin-bottom:9px; } .field label { display:block; color:var(--muted); margin-bottom:3px; font-size:12px; }
+    .field input { width:100%; background:var(--panel2); border:1px solid var(--line2); color:var(--txt); border-radius:7px; padding:7px; }
+    .hint { color:var(--muted); font-size:11px; }
+    table.th { width:100%; border-collapse:collapse; font-size:12px; } table.th td { padding:2px 4px; } table.th td:last-child{text-align:right;color:var(--muted)}
+    #liveLog, #log { font-family:ui-monospace,Menlo,monospace; font-size:11px; max-height:280px; overflow:auto; }
+    .line { padding:2px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+    .line.warn{color:#fde68a} .line.err{color:#fca5a5} .line.ok{color:#86efac} .line .ts{color:var(--muted)}
+    .banner { border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08); }
+  </style>
+</head>
+<body>
+  <header>
+    <b>Pass-Funnel Validator</b>
+    <span class="pill" id="statePill">Idle</span>
+  </header>
+  <nav>
+    <button data-tab="run" class="active">Run</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="scan">Scan</button>
+  </nav>
+  <main>
+    <!-- RUN -->
+    <section class="tab active" id="tab-run">
+      <div class="btnrow">
+        <button class="act primary" id="btnStart" title="Begin — auto-resumes an interrupted run, or a fresh pass from the top">▶ Start</button>
+        <button class="act" id="btnPause">⏸ Pause</button>
+        <button class="act danger" id="btnStop">⏹ Stop</button>
+        <button class="act" id="btnRestart" title="Start over — stop, clear progress + log, run fresh">⟳ Restart</button>
+      </div>
+      <div class="btnrow">
+        <button class="act mini" id="btnExportCsv">⬇ CSV</button>
+        <button class="act mini" id="btnExportJson">⬇ JSON</button>
+        <button class="act mini" id="btnCloseTabs">✕ Close tab</button>
+        <button class="act mini danger" id="btnReset">↺ Reset</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="dryRun" /> Dry-run — compute funnel/remark but never write to the dashboard</label>
+
+      <div class="card banner" id="captchaBanner" style="display:none;">
+        <b>⚠ CAPTCHA</b> — solve it in the amazon.in tab; the run <b>auto-resumes</b> when cleared.
+      </div>
+
+      <div class="card">
+        <h3>Current</h3>
+        <div class="kv">
+          <div class="k">Status</div><div class="v" id="curStatus">Idle</div>
+          <div class="k">ASIN</div><div class="v mono" id="curAsin">—</div>
+          <div class="k">Step</div><div class="v" id="curStep">—</div>
+          <div class="k">Page</div><div class="v" id="curPage">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Counters</h3>
+        <div class="chips">
+          <div class="chip"><span>Processed</span><span class="num" id="cProcessed">0</span></div>
+          <div class="chip"><span>RS</span><span class="num rs" id="cRs">0</span></div>
+          <div class="chip"><span>DP</span><span class="num dp" id="cDp">0</span></div>
+          <div class="chip"><span>Funnel changed</span><span class="num ok" id="cChanged">0</span></div>
+          <div class="chip"><span>Flagged</span><span class="num warn" id="cFlagged">0</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Live log</h3>
+        <div id="liveLog"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="tab" id="tab-settings">
+      <div class="field"><label>Dashboard origin</label><input id="setOrigin" placeholder="http://100.82.234.106:3000" /></div>
+      <div class="btnrow">
+        <div class="field" style="flex:1"><label>Throttle min (ms)</label><input id="setThrottleMin" type="number" /></div>
+        <div class="field" style="flex:1"><label>Throttle max (ms)</label><input id="setThrottleMax" type="number" /></div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="setWriteRemark" /> Write the BSR rank into Remark</label>
+      <div class="card">
+        <h3>Category thresholds (DP if BSR missing or ≥)</h3>
+        <table class="th">
+          <tr><td>Beauty</td><td>60,000</td></tr>
+          <tr><td>Sports / Outdoors</td><td>30,000</td></tr>
+          <tr><td>Health &amp; Personal Care</td><td>50,000</td></tr>
+          <tr><td>Baby</td><td>40,000</td></tr>
+          <tr><td>Musical Instruments</td><td>30,000</td></tr>
+          <tr><td>Everything else</td><td>50,000</td></tr>
+        </table>
+        <p class="hint">Thresholds live in <b>config.js</b> (edit there to change). Category comes from the product's primary Amazon BSR category.</p>
+      </div>
+      <button class="act primary" id="btnSaveSettings">Save settings</button>
+    </section>
+
+    <!-- SCAN -->
+    <section class="tab" id="tab-scan">
+      <div class="btnrow">
+        <button class="act primary" id="btnScan">Scan dashboard</button>
+        <button class="act mini" id="btnCopyScan">Copy JSON</button>
+      </div>
+      <p class="hint">Open the <b>Pass file</b> view, then Scan — confirms the grid + Remark column so the writes land correctly.</p>
+      <div class="card"><div id="log"></div></div>
+    </section>
+  </main>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
