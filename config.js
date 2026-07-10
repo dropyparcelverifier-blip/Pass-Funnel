@@ -82,6 +82,12 @@ export function remarkText(bsr, bsrCategory) {
 // Defaults (overridable from the side-panel Settings tab, persisted under K.SETTINGS).
 // ---------------------------------------------------------------------------
 export const DEFAULT_SETTINGS = {
+  // Which file we're processing:
+  //   'pass'   → re-check FUNNEL (only if wrong) + write Remark. Nothing else. (default)
+  //   'failed' → FULL validation: scrape amazon.in (+ amazon.com for USD), fill/correct
+  //              EVERY field (weight, INR, USD, category, funnel, source link, remark),
+  //              then PEEK the dashboard verdict and Move Pass only if it would pass.
+  mode: 'pass',
   // The dashboard origin (same host as Dropy Auto-Validator). Origin only.
   dashboardOrigin: 'http://100.82.234.106:3000',
   // Randomised human-paced delay between amazon.in loads (ms).
@@ -91,10 +97,16 @@ export const DEFAULT_SETTINGS = {
   pageTimeoutMs: 30000,
   // Bring the amazon.in tab forward so you can watch which ASIN is scraping.
   showWorkingTab: true,
-  // DRY-RUN: compute + log the funnel/remark but DON'T write to the dashboard.
+  // DRY-RUN: compute + log everything but DON'T write to the dashboard.
   dryRun: true,
   // Write the BSR rank into Remark for every processed row.
   writeRemark: true,
+  // ---- Failed-file mode only ----
+  // US ZIP used to force amazon.com to render USD (India IP otherwise shows ₹).
+  usZip: '10001',
+  // Which URL goes into the "Source Link" column: 'com' (the USA source you buy
+  // from) or 'in' (the India listing).
+  sourceLinkHost: 'com',
 };
 
 export async function getSettings() {

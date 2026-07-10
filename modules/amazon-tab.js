@@ -74,6 +74,26 @@ export async function navigate(url, timeoutMs) {
   throw new Error('content script not ready');
 }
 
+// Wait for the managed tab to reach 'complete' and answer a content-script
+// ping, WITHOUT navigating (used after an in-page reload, e.g. setting the US
+// delivery location on amazon.com reloads the page).
+export async function waitReady(timeoutMs) {
+  if (tabId == null) throw new Error('no amazon tab');
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    let t;
+    try { t = await chrome.tabs.get(tabId); } catch { throw new Error('amazon tab was closed'); }
+    if (t.status === 'complete') break;
+    await sleep(300);
+  }
+  while (Date.now() < deadline) {
+    try { const res = await chrome.tabs.sendMessage(tabId, { type: 'AMAZON_PING' }); if (res?.ok) return tabId; }
+    catch { /* not injected yet */ }
+    await sleep(300);
+  }
+  throw new Error('content script not ready');
+}
+
 // Send an RPC to the managed Amazon tab.
 export async function rpc(message) {
   if (tabId == null) throw new Error('no amazon tab');

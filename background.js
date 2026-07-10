@@ -9,7 +9,7 @@ import { createEngine } from './modules/engine.js';
 const state = {
   settings: { ...DEFAULT_SETTINGS },
   running: false, paused: false, pausedByCaptcha: false, status: 'Idle',
-  log: [], counters: { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0 },
+  log: [], counters: { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0, moved: 0, corrected: 0 },
   registeredOrigin: null, lastScan: null,
 };
 const DASHBOARD_SCRIPT_ID = 'pfv-dashboard-cs';
@@ -127,7 +127,8 @@ autoResumeIfNeeded('cold start');
 
 // ---- CSV export ------------------------------------------------------------
 function recordsToCsv(records) {
-  const cols = ['asin', 'bsr', 'bsrCategory', 'thresholdKey', 'threshold', 'funnel', 'funnelChanged', 'remark', 'flags'];
+  const cols = ['asin', 'bsr', 'bsrCategory', 'thresholdKey', 'threshold', 'funnel', 'funnelChanged',
+    'weight', 'inr', 'usd', 'category', 'sourceLink', 'remark', 'verdict', 'moved', 'flags'];
   const esc = v => { if (v == null) v = ''; if (Array.isArray(v)) v = v.join(' | '); v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   return cols.join(',') + '\n' + records.map(r => cols.map(c => esc(r[c])).join(',')).join('\n');
 }

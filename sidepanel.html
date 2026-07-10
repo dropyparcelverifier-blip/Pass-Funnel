@@ -37,7 +37,7 @@
     .chip .num { font-weight:700; } .num.ok{color:#86efac} .num.warn{color:#fde68a} .num.rs{color:#93c5fd} .num.dp{color:#c4b5fd}
     label.toggle { display:flex; align-items:center; gap:7px; margin:8px 0; color:var(--muted); }
     .field { margin-bottom:9px; } .field label { display:block; color:var(--muted); margin-bottom:3px; font-size:12px; }
-    .field input { width:100%; background:var(--panel2); border:1px solid var(--line2); color:var(--txt); border-radius:7px; padding:7px; }
+    .field input, .field select { width:100%; background:var(--panel2); border:1px solid var(--line2); color:var(--txt); border-radius:7px; padding:7px; }
     .hint { color:var(--muted); font-size:11px; }
     table.th { width:100%; border-collapse:collapse; font-size:12px; } table.th td { padding:2px 4px; } table.th td:last-child{text-align:right;color:var(--muted)}
     #liveLog, #log { font-family:ui-monospace,Menlo,monospace; font-size:11px; max-height:280px; overflow:auto; }
@@ -71,7 +71,15 @@
         <button class="act mini" id="btnCloseTabs">✕ Close tab</button>
         <button class="act mini danger" id="btnReset">↺ Reset</button>
       </div>
-      <label class="toggle"><input type="checkbox" id="dryRun" /> Dry-run — compute funnel/remark but never write to the dashboard</label>
+      <div class="field">
+        <label>File / mode</label>
+        <select id="setMode">
+          <option value="pass">Pass file — funnel (if wrong) + remark only</option>
+          <option value="failed">Failed file — full validation: fill/fix every field, move if it passes</option>
+        </select>
+        <p class="hint" id="modeHint">Open the matching file view on the dashboard, then Start.</p>
+      </div>
+      <label class="toggle"><input type="checkbox" id="dryRun" /> Dry-run — compute everything but never write to the dashboard</label>
 
       <div class="card banner" id="captchaBanner" style="display:none;">
         <b>⚠ CAPTCHA</b> — solve it in the amazon.in tab; the run <b>auto-resumes</b> when cleared.
@@ -95,6 +103,8 @@
           <div class="chip"><span>DP</span><span class="num dp" id="cDp">0</span></div>
           <div class="chip"><span>Funnel changed</span><span class="num ok" id="cChanged">0</span></div>
           <div class="chip"><span>Flagged</span><span class="num warn" id="cFlagged">0</span></div>
+          <div class="chip"><span>Moved→Pass</span><span class="num ok" id="cMoved">0</span></div>
+          <div class="chip"><span>Corrected</span><span class="num rs" id="cCorrected">0</span></div>
         </div>
       </div>
 
@@ -112,6 +122,19 @@
         <div class="field" style="flex:1"><label>Throttle max (ms)</label><input id="setThrottleMax" type="number" /></div>
       </div>
       <label class="toggle"><input type="checkbox" id="setWriteRemark" /> Write the BSR rank into Remark</label>
+      <div class="card">
+        <h3>Failed-file mode only</h3>
+        <div class="btnrow">
+          <div class="field" style="flex:1"><label>US ZIP (for USD price)</label><input id="setUsZip" placeholder="10001" /></div>
+          <div class="field" style="flex:1"><label>Source Link uses</label>
+            <select id="setSourceHost">
+              <option value="com">amazon.com URL</option>
+              <option value="in">amazon.in URL</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Failed mode scrapes amazon.com (with this ZIP) for USD, fills every field, then peeks the verdict and clicks Move Pass only if the row now passes.</p>
+      </div>
       <div class="card">
         <h3>Category thresholds (DP if BSR missing or ≥)</h3>
         <table class="th">
@@ -133,7 +156,7 @@
         <button class="act primary" id="btnScan">Scan dashboard</button>
         <button class="act mini" id="btnCopyScan">Copy JSON</button>
       </div>
-      <p class="hint">Open the <b>Pass file</b> view, then Scan — confirms the grid + Remark column so the writes land correctly.</p>
+      <p class="hint">Open the <b>Pass</b> or <b>Failed</b> file view, then Scan — confirms the grid + columns so the writes land correctly.</p>
       <div class="card"><div id="log"></div></div>
     </section>
   </main>

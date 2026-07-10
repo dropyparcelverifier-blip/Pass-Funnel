@@ -49,6 +49,7 @@ function renderState(s) {
   $('cProcessed').textContent = c.processed ?? s.processedCount ?? 0;
   $('cRs').textContent = c.rs ?? 0; $('cDp').textContent = c.dp ?? 0;
   $('cChanged').textContent = c.funnelChanged ?? 0; $('cFlagged').textContent = c.flagged ?? 0;
+  $('cMoved').textContent = c.moved ?? 0; $('cCorrected').textContent = c.corrected ?? 0;
   $('captchaBanner').style.display = s.pausedByCaptcha ? 'block' : 'none';
   renderControls();
 }
@@ -76,6 +77,13 @@ $('btnReset').addEventListener('click', async () => {
   renderState(await send({ action: 'getState' })); b.disabled = false; b.textContent = o;
 });
 $('dryRun').addEventListener('change', async () => { await send({ action: 'saveSettings', settings: { dryRun: $('dryRun').checked } }); });
+function updateModeHint() {
+  const failed = $('setMode').value === 'failed';
+  $('modeHint').textContent = failed
+    ? 'Open the FAILED file view, then Start. Scrapes amazon.in + amazon.com, fills/fixes every field, moves rows that now pass.'
+    : 'Open the PASS file view, then Start. Only corrects the funnel (if wrong) and writes the Remark.';
+}
+$('setMode').addEventListener('change', async () => { await send({ action: 'saveSettings', settings: { mode: $('setMode').value } }); updateModeHint(); });
 
 // ---- export ----
 async function exportAudit(format) {
@@ -96,6 +104,10 @@ function fillSettings(st) {
   $('setThrottleMax').value = st.throttleMaxMs ?? 5000;
   $('setWriteRemark').checked = st.writeRemark !== false;
   $('dryRun').checked = !!st.dryRun;
+  $('setMode').value = st.mode === 'failed' ? 'failed' : 'pass';
+  $('setUsZip').value = st.usZip || '10001';
+  $('setSourceHost').value = st.sourceLinkHost === 'in' ? 'in' : 'com';
+  updateModeHint();
 }
 $('btnSaveSettings').addEventListener('click', async () => {
   const settings = {
@@ -103,6 +115,9 @@ $('btnSaveSettings').addEventListener('click', async () => {
     throttleMinMs: parseInt($('setThrottleMin').value, 10) || 2000,
     throttleMaxMs: parseInt($('setThrottleMax').value, 10) || 5000,
     writeRemark: $('setWriteRemark').checked,
+    mode: $('setMode').value,
+    usZip: $('setUsZip').value.trim() || '10001',
+    sourceLinkHost: $('setSourceHost').value === 'in' ? 'in' : 'com',
   };
   const r = await send({ action: 'saveSettings', settings });
   appendLog({ ts: Date.now(), text: r?.ok ? 'settings saved' : 'save failed', kind: r?.ok ? 'ok' : 'err' });

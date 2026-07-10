@@ -1,3 +1,7 @@
+
+
+
+
 // modules/engine.js — Pass-Funnel re-check state machine.
 //
 // For each row in the PASS file: scrape amazon.in for the primary BSR + its
@@ -15,6 +19,10 @@ import * as tab from './amazon-tab.js';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (a, b) => Math.round(a + Math.random() * (b - a));
 const IN_ORIGIN = 'https://www.amazon.in';
+const US_ORIGIN = 'https://www.amazon.com';
+// Fields the dashboard requires before it shows "Move Pass" (used by the
+// failed-file verdict peek).
+const REQUIRED_FIELDS = ['weight', 'inr', 'usd', 'sourceLink', 'category'];
 
 export function createEngine(ctx) {
   // ctx: { log, emit, sendToDashboard, getWorkingWindowId, focusDashboard }
@@ -23,11 +31,14 @@ export function createEngine(ctx) {
     stopRequested: false, pauseRequested: false,
     status: 'Idle', currentAsin: null, step: '', page: null, totalPages: null,
     processed: new Set(),
-    counters: { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0 },
+    counters: { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0, moved: 0, corrected: 0 },
     rowRecords: {},
     loopActive: false, resetSeq: 0,
     active: false,   // in-flight → survives restart to auto-resume (see wantsResume)
   };
+  // amazon.com renders ₹ on an India IP until we set a US delivery location.
+  // Amazon remembers it per session, so we only need to set it once per run.
+  let usLocationSet = false;
 
   // ---- persistence ---------------------------------------------------------
   async function hydrate() {
@@ -100,7 +111,7 @@ export function createEngine(ctx) {
   // (auto-resumes — no manual click). Stop/Pause during the wait exits.
   async function detect() {
     for (let i = 0; i < 3; i++) {
-      const t = (await tab.rpc({ type: 'DETECT_PAGE_TYPE' }))?.type || 'other';
+      const t = (await tab.rpc({ type: 'DETECT_PAGE_TYPE' }))?.pageType || 'other';
       if (t === 'captcha') {
         s.pausedByCaptcha = true;
         s.status = 'CAPTCHA — solve it in the amazon.in tab; auto-resumes when cleared';
@@ -110,7 +121,7 @@ export function createEngine(ctx) {
         let cleared = false;
         for (let k = 0; k < 200 && !s.stopRequested && !s.pauseRequested; k++) {
           await sleep(3000);
-          const t2 = (await tab.rpc({ type: 'DETECT_PAGE_TYPE' }))?.type || 'other';
+          const t2 = (await tab.rpc({ type: 'DETECT_PAGE_TYPE' }))?.pageType || 'other';
           if (t2 !== 'captcha') { cleared = true; break; }
         }
         if (!cleared) throw new Stopped();
@@ -128,8 +139,67 @@ export function createEngine(ctx) {
     return (await tab.rpc({ type: 'SCRAPE_PRODUCT' }))?.data || {};
   }
 
-  // ---- per-row: funnel + remark --------------------------------------------
+  // Scrape the amazon.com source page for the USD price. Forces a US delivery
+  // location the first time (India IP otherwise renders ₹); if a page still
+  // comes back non-USD, re-set the location and re-scrape once.
+  async function scrapeUsa(url, settings) {
+    await loadAmazon(url, settings);
+    await detect();
+    let data = (await tab.rpc({ type: 'SCRAPE_PRODUCT' }))?.data || {};
+    if (data.currency !== 'USD') {
+      try {
+        await tab.rpc({ type: 'SET_US_LOCATION', zip: settings.usZip || '10001' });
+        usLocationSet = true;
+        try { await tab.waitReady(settings.pageTimeoutMs); } catch {}
+        checkControl();
+        await detect();
+        data = (await tab.rpc({ type: 'SCRAPE_PRODUCT' }))?.data || {};
+      } catch (e) { if (e.stopped) throw e; }
+    }
+    return data;
+  }
+
+  // ---- per-row dispatcher --------------------------------------------------
   async function processRow(row, settings) {
+    if (settings.mode === 'failed') return processRowFailed(row, settings);
+    return processRowPass(row, settings);
+  }
+
+  // Resolve the amazon.in product URL for a row (its India link, else /dp/ASIN).
+  function indiaUrlFor(row) {
+    return row.indiaUrl && /amazon\.in/.test(row.indiaUrl)
+      ? row.indiaUrl
+      : `${IN_ORIGIN}/dp/${row.asin}`;
+  }
+
+  // Compute funnel + remark from a scraped amazon.in payload.
+  function funnelFromIndia(india) {
+    const bsr = Number.isFinite(india.bsrPrimary) ? india.bsrPrimary : null;
+    const bsrCat = india.bsrPrimaryCategory || '';
+    const bcRoot = Array.isArray(india.categoryPath) ? india.categoryPath[0] : '';
+    const decided = decideFunnel(bsr, bsrCat, bcRoot);
+    return { bsr, bsrCat, bcRoot, ...decided };
+  }
+
+  // Write one dashboard field, honouring dry-run and recording the outcome.
+  // Skips silently when we have no confident value (never blanks a good cell).
+  async function writeCell(asin, field, value, rec, settings, label) {
+    if (value == null || value === '') return { ok: false, skipped: true };
+    const shown = label || field;
+    if (settings.dryRun) {
+      log(`${asin}: DRY-RUN ${shown} ← ${value}`, 'info', asin);
+      rec.writes = rec.writes || {}; rec.writes[field] = String(value);
+      return { ok: true, dryRun: true };
+    }
+    const r = await ctx.sendToDashboard({ type: 'WRITE_FIELD', asin, field, value: String(value) });
+    rec.writes = rec.writes || {}; rec.writes[field] = { ok: !!r?.ok, now: r?.now };
+    if (r?.corrected) { s.counters.corrected = (s.counters.corrected || 0) + 1; log(`${asin}: ${shown} corrected → ${value}`, 'ok', asin); }
+    if (!r?.ok) { rec.flags.push(`${shown} write failed`); log(`${asin}: ${shown} write failed${r?.error ? ' — ' + r.error : ''}`, 'warn', asin); }
+    return r || { ok: false };
+  }
+
+  // ---- PASS file: funnel (only if wrong) + remark. Nothing else. -----------
+  async function processRowPass(row, settings) {
     const asin = row.asin;
     const rec = s.rowRecords[asin] || { asin, flags: [] };
     rec.flags = rec.flags || [];
@@ -137,23 +207,16 @@ export function createEngine(ctx) {
     highlight(asin);
     setStep('scrape amazon.in', asin);
 
-    const url = row.indiaUrl && /amazon\.in/.test(row.indiaUrl)
-      ? row.indiaUrl
-      : `${IN_ORIGIN}/dp/${asin}`;
-
     let india = {};
     try {
-      india = await scrapeIndia(asin, url, settings);
+      india = await scrapeIndia(asin, indiaUrlFor(row), settings);
     } catch (e) {
       if (e.stopped) throw e;
       rec.flags.push('india scrape failed: ' + e.message);
       log(`${asin}: amazon.in scrape failed — ${e.message}`, 'err', asin);
     }
 
-    const bsr = Number.isFinite(india.bsrPrimary) ? india.bsrPrimary : null;
-    const bsrCat = india.bsrPrimaryCategory || '';
-    const bcRoot = Array.isArray(india.categoryPath) ? india.categoryPath[0] : '';
-    const { funnel, key, threshold, matched, reason } = decideFunnel(bsr, bsrCat, bcRoot);
+    const { bsr, bsrCat, bcRoot, funnel, key, threshold, matched, reason } = funnelFromIndia(india);
     rec.bsr = bsr; rec.bsrCategory = bsrCat; rec.thresholdKey = key; rec.threshold = threshold;
     rec.funnel = funnel; rec.categoryMatched = matched;
     log(`${asin}: ${reason}${matched ? '' : ' [default threshold]'} — ${bsrCat || bcRoot || 'no category'}`, 'info', asin);
@@ -187,7 +250,130 @@ export function createEngine(ctx) {
       }
     }
 
-    // count + finalize
+    if (funnel === 'RS') s.counters.rs++; else s.counters.dp++;
+    finalizeRecord(rec);
+  }
+
+  // ---- FAILED file: fill/correct EVERY field, then peek verdict + move -----
+  async function processRowFailed(row, settings) {
+    const asin = row.asin;
+    const rec = s.rowRecords[asin] || { asin, flags: [] };
+    rec.flags = rec.flags || [];
+    s.currentAsin = asin;
+    highlight(asin);
+
+    // 1) Scrape amazon.in (weight, INR, BSR/category).
+    setStep('scrape amazon.in', asin);
+    let india = {};
+    try {
+      india = await scrapeIndia(asin, indiaUrlFor(row), settings);
+    } catch (e) {
+      if (e.stopped) throw e;
+      rec.flags.push('india scrape failed: ' + e.message);
+      log(`${asin}: amazon.in scrape failed — ${e.message}`, 'err', asin);
+    }
+
+    // 2) Scrape amazon.com (USD + source link) — needs the row's USA link.
+    let usa = {};
+    if (row.usaUrl && /amazon\.com/.test(row.usaUrl)) {
+      setStep('scrape amazon.com', asin);
+      try {
+        usa = await scrapeUsa(row.usaUrl, settings);
+      } catch (e) {
+        if (e.stopped) throw e;
+        rec.flags.push('usa scrape failed: ' + e.message);
+        log(`${asin}: amazon.com scrape failed — ${e.message}`, 'err', asin);
+      }
+    } else {
+      rec.flags.push('no USA link — USD/source not set');
+      log(`${asin}: no amazon.com link on the row — USD + source link can't be filled`, 'warn', asin);
+    }
+
+    // 3) Compute funnel + remark from India BSR.
+    const { bsr, bsrCat, bcRoot, funnel, key, threshold, matched, reason } = funnelFromIndia(india);
+    rec.bsr = bsr; rec.bsrCategory = bsrCat; rec.thresholdKey = key; rec.threshold = threshold;
+    rec.funnel = funnel; rec.categoryMatched = matched;
+
+    const inr = (india.currency === 'INR' && Number.isFinite(india.priceValue)) ? india.priceValue
+              : (Number.isFinite(india.priceValue) ? india.priceValue : null);
+    const usd = (usa.currency === 'USD' && Number.isFinite(usa.priceValue)) ? usa.priceValue : null;
+    const weight = Number.isFinite(india.weightGrams) ? india.weightGrams : null;
+    const category = bsrCat || bcRoot || '';
+    const srcUrl = settings.sourceLinkHost === 'in'
+      ? (india.canonicalUrl || `${IN_ORIGIN}/dp/${asin}`)
+      : (usa.canonicalUrl || '');
+    rec.weight = weight; rec.inr = inr; rec.usd = usd; rec.sourceLink = srcUrl;
+    log(`${asin}: ${reason} | weight=${weight ?? '—'}g INR=${inr ?? '—'} USD=${usd ?? '—'} cat="${category || '—'}"`, 'info', asin);
+    if (usd == null && row.usaUrl) { rec.flags.push('USD unavailable from amazon.com'); log(`${asin}: USD not found on the .com page (unavailable / parse miss)`, 'warn', asin); }
+
+    // 4) Fill / correct every field. Focus the dashboard first for live writes.
+    if (!settings.dryRun) await ctx.focusDashboard?.();
+
+    setStep('weight', asin);   await writeCell(asin, 'weight', weight, rec, settings, 'Weight');
+    setStep('INR', asin);      await writeCell(asin, 'inr', inr, rec, settings, 'INR');
+    setStep('USD', asin);      await writeCell(asin, 'usd', usd, rec, settings, 'USD');
+    setStep('source link', asin);
+    if (srcUrl) await writeCell(asin, 'sourceLink', srcUrl, rec, settings, 'Source link');
+    else { rec.flags.push('source link not set'); }
+
+    // Category — a real dropdown; SELECT_CATEGORY fuzzy-matches the option list.
+    setStep('category', asin);
+    if (category) {
+      rec.category = category;
+      if (settings.dryRun) log(`${asin}: DRY-RUN category ← "${category}"`, 'info', asin);
+      else {
+        const cr = await ctx.sendToDashboard({ type: 'SELECT_CATEGORY', asin, category });
+        rec.categoryOk = !!cr?.ok;
+        if (!cr?.ok) { rec.flags.push(`category "${category}" did not match a dropdown option`); log(`${asin}: category "${category}" not applied — ${cr?.error || 'no match'}`, 'warn', asin); }
+        else log(`${asin}: category set → ${cr.chosen || category}`, 'ok', asin);
+      }
+    }
+
+    // Funnel.
+    setStep('funnel', asin);
+    if (settings.dryRun) log(`${asin}: DRY-RUN funnel ← ${funnel}`, 'info', asin);
+    else {
+      const fr = await ctx.sendToDashboard({ type: 'SET_FUNNEL', asin, funnel });
+      rec.funnelOk = !!fr?.ok; rec.funnelCurrent = fr?.current;
+      if (fr?.changed) { rec.funnelChanged = true; s.counters.funnelChanged++; log(`${asin}: funnel corrected ${fr.current || '?'} → ${funnel}`, 'ok', asin); }
+      else if (!fr?.ok) { rec.flags.push(`funnel could not be set (shows ${fr?.current || '?'})`); log(`${asin}: funnel could not be set to ${funnel}`, 'warn', asin); }
+    }
+
+    // Remark (always).
+    if (settings.writeRemark) {
+      const remark = remarkText(bsr, bsrCat);
+      rec.remark = remark;
+      setStep('remark', asin);
+      await writeCell(asin, 'remark', remark, rec, settings, 'Remark');
+    }
+
+    // 5) Peek the verdict; Move Pass only if the dashboard says it now passes.
+    setStep('verdict', asin);
+    if (settings.dryRun) {
+      const stillMissing = REQUIRED_FIELDS.filter(f => {
+        if (f === 'weight') return weight == null;
+        if (f === 'inr') return inr == null;
+        if (f === 'usd') return usd == null;
+        if (f === 'sourceLink') return !srcUrl;
+        if (f === 'category') return !category;
+        return false;
+      });
+      rec.verdict = stillMissing.length ? 'would-fail' : 'would-pass';
+      log(`${asin}: DRY-RUN verdict ${rec.verdict}${stillMissing.length ? ' — missing: ' + stillMissing.join(', ') : ' → would Move Pass'}`, stillMissing.length ? 'warn' : 'info', asin);
+    } else {
+      const peek = await ctx.sendToDashboard({ type: 'CLICK_PASS', asin, opts: { peek: true } });
+      rec.verdict = peek?.verdict || (peek?.ok ? 'pass' : 'fail');
+      if (peek?.ok && peek.verdict === 'pass') {
+        const mv = await ctx.sendToDashboard({ type: 'CLICK_PASS', asin, opts: {} });
+        if (mv?.ok) { rec.moved = true; s.counters.moved = (s.counters.moved || 0) + 1; log(`${asin}: verdict PASS → moved to Pass file`, 'ok', asin); }
+        else { rec.flags.push('move-pass click failed'); log(`${asin}: verdict pass but Move Pass failed — ${mv?.error || '?'}`, 'warn', asin); }
+      } else {
+        const why = peek?.failReason || (peek?.missing && peek.missing.length ? 'missing: ' + peek.missing.join(', ') : peek?.error) || 'verdict fail';
+        rec.flags.push('still failing: ' + why);
+        log(`${asin}: still failing (${why}) — left in Failed file`, 'warn', asin);
+      }
+    }
+
     if (funnel === 'RS') s.counters.rs++; else s.counters.dp++;
     finalizeRecord(rec);
   }
@@ -287,7 +473,8 @@ export function createEngine(ctx) {
     await hydrated;
     await stopAndWait();
     s.processed = new Set(); s.rowRecords = {};
-    s.counters = { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0 };
+    s.counters = { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0, moved: 0, corrected: 0 };
+    usLocationSet = false;
     await chrome.storage.local.remove([K.PROCESSED, K.COUNTERS, K.ROW_RECORDS]).catch(() => {});
     const settings = await getSettings();
     s.stopRequested = false; s.pauseRequested = false; s.paused = false; s.pausedByCaptcha = false;
@@ -327,7 +514,8 @@ export function createEngine(ctx) {
     try { highlight(null); } catch {}
     s.running = false; s.loopActive = false; s.active = false;
     s.processed = new Set(); s.rowRecords = {};
-    s.counters = { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0 };
+    s.counters = { processed: 0, rs: 0, dp: 0, funnelChanged: 0, flagged: 0, moved: 0, corrected: 0 };
+    usLocationSet = false;
     s.status = 'Idle'; s.page = null; s.totalPages = null; s.currentAsin = null; s.step = '';
     s.paused = false; s.pausedByCaptcha = false;
     await chrome.storage.local.remove([K.PROCESSED, K.COUNTERS, K.ROW_RECORDS, K.RUN_STATE]);
