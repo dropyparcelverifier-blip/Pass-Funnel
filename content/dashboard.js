@@ -445,10 +445,14 @@
   //   Checklist labels: Brand, Expire, Size, Multi.
   const _labelText = (l) => clip((l.querySelector('span') || l).textContent, 30);
   function _openMenu() {
-    // The open menu is the smallest visible `div.fixed` that holds labelled
-    // checkboxes (the backdrop `div.fixed.inset-0` has none, so it's excluded).
+    // The open menu is the smallest `div.fixed` that holds labelled checkboxes
+    // (the backdrop `div.fixed.inset-0` has none, so it's excluded). NOTE: we
+    // must NOT use isVisible() here — it's offsetParent-based, which is always
+    // null for position:fixed elements, so it would hide the menu itself. Use a
+    // bounding-rect size check instead. The menu is only in the DOM when open.
     return Array.from(document.querySelectorAll('div.fixed'))
-      .filter(d => isVisible(d) && d.querySelector('label input[type="checkbox"]'))
+      .filter(d => d.querySelector('label input[type="checkbox"]'))
+      .filter(d => { const r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
       .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0] || null;
   }
   async function setMultiSelect(asin, field, wanted) {
