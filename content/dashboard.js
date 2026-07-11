@@ -194,15 +194,21 @@
     await typeIntoInput(ta, String(value));
     await sleep(200);
     const stuck = valuesMatch(ta.value, value);
+    const btnByText = (re) => Array.from(document.querySelectorAll('button')).find(b => isVisible(b) && re.test(clip(b.textContent, 20)));
 
-    // Close the modal: the "Close" button, else Escape.
-    const closeBtn = Array.from(document.querySelectorAll('button'))
-      .find(b => isVisible(b) && /^\s*close\s*$/i.test(clip(b.textContent, 20)));
+    // SAVE first (the modal only persists on Save — Close alone discards).
+    const saveBtn = await _waitEl(() => btnByText(/^\s*save\s*$/i), 1500);
+    let saved = false;
+    if (saveBtn) { realClick(saveBtn); await sleep(500); saved = true; }
+
+    // Then close (Save may already close it; harmless if gone).
+    const closeBtn = btnByText(/^\s*close\s*$/i);
     if (closeBtn) realClick(closeBtn);
     else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
     await sleep(300);
 
-    return { ok: stuck, via: 'remark-modal', now: clip(ta.value, 80), error: stuck ? undefined : `remark did not stick (now="${clip(ta.value, 40)}")` };
+    return { ok: stuck && saved, via: 'remark-modal', now: clip(ta.value, 80),
+      error: !saved ? 'no Save button in remark modal' : (stuck ? undefined : `remark did not stick (now="${clip(ta.value, 40)}")`) };
   }
 
   // =============================== WRITE ====================================
@@ -503,6 +509,13 @@
       .filter(d => { const r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
       .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0] || null;
   }
+  // Close any open dropdown menu so its full-screen backdrop can't swallow our
+  // next click, and so a stale menu can't be mistaken for this cell's.
+  function closeAnyOpenMenu() {
+    const backdrops = Array.from(document.querySelectorAll('div.fixed.inset-0'));
+    if (backdrops.length) { backdrops.forEach(b => { try { b.click(); } catch {} }); return; }
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+  }
   async function setMultiSelect(asin, field, wanted) {
     const { grid, row } = findRow(asin);
     if (!row) return { ok: false, error: `row not found for ASIN ${asin}` };
@@ -515,17 +528,29 @@
       .map(e => clip(e.textContent, 20))
       .filter(t => t && /[A-Za-z]/.test(t) && t.length <= 16 && !/select|choose|\.\.\./i.test(t));
     const want = (wanted || []).filter(Boolean);
-    let missing = want.filter(w => !chips().some(c => norm(c) === norm(w)));
-    if (!missing.length) return { ok: true, current: chips(), added: [], already: want };
+    if (!want.filter(w => !chips().some(c => norm(c) === norm(w))).length) return { ok: true, current: chips(), added: [], already: want };
 
-    // Open the menu with a SINGLE native click (realClick fires click twice,
-    // which toggles a dropdown open→closed). Retry a couple times if needed.
-    let menu = _openMenu();
-    for (let i = 0; i < 3 && !menu; i++) { try { trigger.click(); } catch {} await sleep(300); menu = _openMenu(); }
+    const hasCbSized = (d) => { if (!d.querySelector('label input[type="checkbox"]')) return false; const r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const labelHit = (m, w) => Array.from(m.querySelectorAll('label')).some(l => norm(_labelText(l)) === norm(w) || norm(_labelText(l)).startsWith(norm(w)));
+    // THIS cell's own menu (rendered inside the cell), else a document menu that
+    // actually contains one of OUR labels — never another column's stale menu.
+    const findMenu = () => {
+      const inCell = Array.from(cell.querySelectorAll('div.fixed')).filter(hasCbSized)[0];
+      if (inCell) return inCell;
+      return Array.from(document.querySelectorAll('div.fixed')).filter(hasCbSized).find(m => want.some(w => labelHit(m, w))) || null;
+    };
+
+    closeAnyOpenMenu();               // clear any stale menu from a previous cell
+    await sleep(120);
+
+    // Open THIS cell's menu with a single native click (realClick double-fires).
+    let menu = findMenu();
+    for (let i = 0; i < 3 && !menu; i++) { try { trigger.click(); } catch {} await sleep(300); menu = findMenu(); }
     if (!menu) return { ok: false, error: `${field} menu did not open`, cellHtml: clip(cell.outerHTML, 900) };
+
     const labels = Array.from(menu.querySelectorAll('label'));
     const added = [], failed = [];
-    for (const w of missing) {
+    for (const w of want.filter(w => !chips().some(c => norm(c) === norm(w)))) {
       const opt = labels.find(l => norm(_labelText(l)) === norm(w)) || labels.find(l => norm(_labelText(l)).startsWith(norm(w)));
       if (!opt) { failed.push(w); continue; }
       const cb = opt.querySelector('input[type="checkbox"]');
@@ -533,9 +558,8 @@
       await sleep(150);
       (cb && !cb.checked ? failed : added).push(w);
     }
-    // close: click the backdrop if present, else re-click the trigger
-    const backdrop = document.querySelector('div.fixed.inset-0');
-    if (backdrop) { try { backdrop.click(); } catch {} } else { try { trigger.click(); } catch {} }
+
+    closeAnyOpenMenu();
     await sleep(250);
 
     const cur = chips();
