@@ -107,6 +107,9 @@ function fillSettings(st) {
   $('setMode').value = st.mode === 'failed' ? 'failed' : 'pass';
   $('setUsZip').value = st.usZip || '10001';
   $('setSourceHost').value = st.sourceLinkHost === 'in' ? 'in' : 'com';
+  $('setPassEnrich').checked = st.passEnrich !== false;
+  $('setCountSellers').checked = st.countSellers !== false;
+  $('setCheckAvail').checked = st.checkAvailability !== false;
   updateModeHint();
 }
 $('btnSaveSettings').addEventListener('click', async () => {
@@ -118,6 +121,9 @@ $('btnSaveSettings').addEventListener('click', async () => {
     mode: $('setMode').value,
     usZip: $('setUsZip').value.trim() || '10001',
     sourceLinkHost: $('setSourceHost').value === 'in' ? 'in' : 'com',
+    passEnrich: $('setPassEnrich').checked,
+    countSellers: $('setCountSellers').checked,
+    checkAvailability: $('setCheckAvail').checked,
   };
   const r = await send({ action: 'saveSettings', settings });
   appendLog({ ts: Date.now(), text: r?.ok ? 'settings saved' : 'save failed', kind: r?.ok ? 'ok' : 'err' });

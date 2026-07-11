@@ -87,6 +87,19 @@ export function remarkText(bsr, bsrCategory) {
 export const SIZE_MAX_GRAMS = 700;      // Size ticked when weight is UNDER this.
 export const MULTI_MIN_SELLERS = 5;     // Multi ticked when sellers exceed this.
 
+// Exact dashboard chip labels (from the Scrappy v2 menus). Origin uses "US" /
+// "India" (NOT "IN"); Checklist uses "Expire" (NOT "Expiry").
+export const ORIGIN_LABELS = { us: 'US', in: 'India' };
+export const CHECKLIST_LABELS = { expiry: 'Expire', size: 'Size', multi: 'Multi' };
+
+// Turn a decideOrigin/decideChecklist result into the list of labels to tick.
+export function originLabels(origin) {
+  return [origin.us && ORIGIN_LABELS.us, origin.in && ORIGIN_LABELS.in].filter(Boolean);
+}
+export function checklistLabels(checklist) {
+  return [checklist.expiry && CHECKLIST_LABELS.expiry, checklist.size && CHECKLIST_LABELS.size, checklist.multi && CHECKLIST_LABELS.multi].filter(Boolean);
+}
+
 // Which Origin chips to tick. `indiaAvailable` = the product is sellable in
 // India (amazon.in live product; extend to other marketplaces later).
 export function decideOrigin({ indiaAvailable } = {}) {
@@ -171,6 +184,16 @@ export const DEFAULT_SETTINGS = {
   // Which URL goes into the "Source Link" column: 'com' (the USA source you buy
   // from) or 'in' (the India listing).
   sourceLinkHost: 'com',
+  // ---- Pass-file ORIGIN + CHECKLIST enrichment ----
+  // Tick Origin (US always, India when sellable) + Checklist (Expire always,
+  // Size <700g, Multi when unique sellers > 5). Adds page loads per row.
+  passEnrich: true,
+  // Count unique amazon.in sellers (extra offer-listing load) → Multi checkbox.
+  countSellers: true,
+  // Search Indian marketplaces to decide the India origin chip.
+  checkAvailability: true,
+  availabilitySites: ['amazon_in', 'flipkart', 'nykaa', 'meesho', 'jiomart'],
+  availabilityThreshold: 0.45,
 };
 
 export async function getSettings() {

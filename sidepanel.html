@@ -136,6 +136,13 @@
         <p class="hint">Failed mode scrapes amazon.com (with this ZIP) for USD, fills every field, then peeks the verdict and clicks Move Pass only if the row now passes.</p>
       </div>
       <div class="card">
+        <h3>Pass-file enrichment (Origin + Checklist)</h3>
+        <label class="toggle"><input type="checkbox" id="setPassEnrich" /> Tick Origin (US + India) &amp; Checklist (Expire/Size/Multi)</label>
+        <label class="toggle"><input type="checkbox" id="setCountSellers" /> Count amazon.in sellers → Multi (extra page load per row)</label>
+        <label class="toggle"><input type="checkbox" id="setCheckAvail" /> Search Flipkart/Nykaa/Meesho/JioMart/Amazon.in → India origin</label>
+        <p class="hint">Only runs in <b>Pass</b> mode. The availability search adds up to 5 page loads per row — slow but that's the India check. Selectors are best-effort; dry-run first and send me any "tick failed" cell dumps to lock them.</p>
+      </div>
+      <div class="card">
         <h3>Category thresholds (DP if BSR missing or ≥)</h3>
         <table class="th">
           <tr><td>Beauty</td><td>60,000</td></tr>

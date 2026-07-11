@@ -437,6 +437,64 @@
     };
   }
 
+  // ===================== ORIGIN / CHECKLIST (multi-select) ==================
+  // Both are a <button> showing selected chips that opens a `div.fixed` menu of
+  // <label><input type="checkbox"><span>Label</span></label> rows. We only ADD
+  // ticks (never untick): tick each wanted label whose checkbox isn't already on.
+  //   Origin    labels: US (always), India (when sellable in India), China.
+  //   Checklist labels: Brand, Expire, Size, Multi.
+  const _labelText = (l) => clip((l.querySelector('span') || l).textContent, 30);
+  function _openMenu() {
+    // The open menu is the smallest visible `div.fixed` that holds labelled
+    // checkboxes (the backdrop `div.fixed.inset-0` has none, so it's excluded).
+    return Array.from(document.querySelectorAll('div.fixed'))
+      .filter(d => isVisible(d) && d.querySelector('label input[type="checkbox"]'))
+      .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0] || null;
+  }
+  async function setMultiSelect(asin, field, wanted) {
+    const { grid, row } = findRow(asin);
+    if (!row) return { ok: false, error: `row not found for ASIN ${asin}` };
+    const cell = cellForField(grid, row, field);
+    if (!cell) return { ok: false, error: `no ${field} column` };
+    const trigger = cell.querySelector('button, [role="button"]');
+    if (!trigger) return { ok: false, error: `no ${field} dropdown button`, cellHtml: clip(cell.outerHTML, 900) };
+
+    const chips = () => Array.from(trigger.querySelectorAll('span'))
+      .map(e => clip(e.textContent, 20))
+      .filter(t => t && /[A-Za-z]/.test(t) && t.length <= 16 && !/select|choose|\.\.\./i.test(t));
+    const want = (wanted || []).filter(Boolean);
+    let missing = want.filter(w => !chips().some(c => norm(c) === norm(w)));
+    if (!missing.length) return { ok: true, current: chips(), added: [], already: want };
+
+    realClick(trigger); await sleep(350);                 // open the menu
+    const menu = _openMenu();
+    if (!menu) return { ok: false, error: `${field} menu did not open`, cellHtml: clip(cell.outerHTML, 900) };
+    const labels = Array.from(menu.querySelectorAll('label'));
+    const added = [], failed = [];
+    for (const w of missing) {
+      const opt = labels.find(l => norm(_labelText(l)) === norm(w)) || labels.find(l => norm(_labelText(l)).startsWith(norm(w)));
+      if (!opt) { failed.push(w); continue; }
+      const cb = opt.querySelector('input[type="checkbox"]');
+      if (cb) { if (!cb.checked) cb.click(); } else { opt.click(); }   // single toggle
+      await sleep(150);
+      (cb && !cb.checked ? failed : added).push(w);
+    }
+    // close: click the backdrop if present, else re-click the trigger
+    const backdrop = document.querySelector('div.fixed.inset-0');
+    if (backdrop) { try { backdrop.click(); } catch {} } else { try { trigger.click(); } catch {} }
+    await sleep(250);
+
+    const cur = chips();
+    const stillMissing = want.filter(w => !cur.some(c => norm(c) === norm(w)));
+    const ok = stillMissing.length === 0;
+    return {
+      ok, current: cur, added,
+      failed: Array.from(new Set(failed.concat(stillMissing))),
+      cellHtml: ok ? undefined : clip(cell.outerHTML, 1000),
+      menuHtml: ok ? undefined : clip(menu.outerHTML, 1000),
+    };
+  }
+
   // ============================ ROW ACTIONS =================================
   function rowButton(row, re) {
     return Array.from(row.el.querySelectorAll('button, [role="button"], a')).find(b => re.test(clip(b.textContent || b.getAttribute('aria-label'), 30)));
@@ -914,6 +972,8 @@
         case 'WRITE_FIELD': writeField(msg.asin, msg.field, msg.value).then(reply, replyErr); return true;
         case 'SELECT_CATEGORY': selectCategory(msg.asin, msg.category).then(reply, replyErr); return true;
         case 'SET_FUNNEL': setFunnel(msg.asin, msg.funnel).then(reply, replyErr); return true;
+        case 'SET_ORIGIN': setMultiSelect(msg.asin, 'origin', msg.labels).then(reply, replyErr); return true;
+        case 'SET_CHECKLIST': setMultiSelect(msg.asin, 'checklist', msg.labels).then(reply, replyErr); return true;
         default: return false;
       }
     } catch (e) { reply({ ok: false, error: e?.message || String(e) }); return false; }

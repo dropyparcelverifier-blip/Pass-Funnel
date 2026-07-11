@@ -36,6 +36,17 @@
       ],
       "js": ["content/amazon.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.amazon.in/*",
+        "https://www.flipkart.com/*",
+        "https://www.nykaa.com/*",
+        "https://www.meesho.com/*",
+        "https://www.jiomart.com/*"
+      ],
+      "js": ["content/marketplace.js"],
+      "run_at": "document_idle"
     }
   ],
   "minimum_chrome_version": "114"

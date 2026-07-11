@@ -13,7 +13,11 @@
 // Persistence (chrome.storage.local, `pfv` keys) + an `active` flag give clean
 // resume after a stop and AUTO-resume after a crash/restart.
 
-import { K, getSettings, decideFunnel, remarkText } from '../config.js';
+import {
+  K, getSettings, decideFunnel, remarkText,
+  decideOrigin, decideChecklist, decideIndiaAvailable, originLabels, checklistLabels,
+  availabilityQuery, titleSimilarity, MARKETPLACES, AVAILABILITY_SIM_THRESHOLD,
+} from '../config.js';
 import * as tab from './amazon-tab.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -159,6 +163,38 @@ export function createEngine(ctx) {
     return data;
   }
 
+  // Count unique amazon.in sellers via the offer-listing page (Multi checkbox).
+  async function scrapeSellerCount(asin, settings) {
+    const url = `${IN_ORIGIN}/gp/offer-listing/${asin}`;
+    await loadAmazon(url, settings);
+    await detect();
+    const r = await tab.rpc({ type: 'SCRAPE_SELLERS' });
+    return Number.isFinite(r?.count) ? r.count : null;
+  }
+
+  // Search each enabled Indian marketplace by product name; a title similar
+  // enough to the query means the product is sellable in India (Origin "India").
+  async function checkIndiaAvailability(row, settings) {
+    const enabled = new Set(settings.availabilitySites || []);
+    const sites = MARKETPLACES.filter(m => enabled.has(m.key));
+    const query = availabilityQuery(row.brand, row.title);
+    if (!query || !sites.length) return { available: false, sites: [], query, results: [] };
+    const threshold = settings.availabilityThreshold ?? AVAILABILITY_SIM_THRESHOLD;
+    const results = [];
+    for (const site of sites) {
+      checkControl();
+      setStep(`india avail: ${site.name}`, row.asin);
+      try {
+        await loadAmazon(site.search(query), settings);   // marketplace.js answers the ping
+        const r = await tab.rpc({ type: 'MP_SEARCH_SCRAPE' });
+        const titles = (r && r.titles) || [];
+        let best = 0; for (const t of titles) { const s = titleSimilarity(query, t); if (s > best) best = s; }
+        results.push({ key: site.key, name: site.name, sim: Math.round(best * 100) / 100, matched: best >= threshold });
+      } catch (e) { if (e.stopped) throw e; results.push({ key: site.key, name: site.name, sim: 0, error: e.message }); }
+    }
+    return { ...decideIndiaAvailable(results, threshold), query, results };
+  }
+
   // ---- per-row dispatcher --------------------------------------------------
   async function processRow(row, settings) {
     if (settings.mode === 'failed') return processRowFailed(row, settings);
@@ -250,8 +286,54 @@ export function createEngine(ctx) {
       }
     }
 
+    // 3) Origin + Checklist enrichment (US always; India when sellable;
+    //    Expire always; Size <700g; Multi when unique sellers > 5).
+    if (settings.passEnrich) {
+      await enrichPassRow(row, rec, india, settings);
+    }
+
     if (funnel === 'RS') s.counters.rs++; else s.counters.dp++;
     finalizeRecord(rec);
+  }
+
+  // Origin/Checklist ticking for a Pass-file row (scrapes sellers + availability).
+  async function enrichPassRow(row, rec, india, settings) {
+    const asin = row.asin;
+
+    let sellerCount = null;
+    if (settings.countSellers) {
+      setStep('count sellers', asin);
+      try { sellerCount = await scrapeSellerCount(asin, settings); }
+      catch (e) { if (e.stopped) throw e; rec.flags.push('seller count failed: ' + e.message); log(`${asin}: seller count failed — ${e.message}`, 'warn', asin); }
+    }
+
+    let avail = { available: false, sites: [] };
+    if (settings.checkAvailability) {
+      try { avail = await checkIndiaAvailability(row, settings); }
+      catch (e) { if (e.stopped) throw e; rec.flags.push('availability check failed: ' + e.message); log(`${asin}: availability check failed — ${e.message}`, 'warn', asin); }
+    }
+
+    const origin = decideOrigin({ indiaAvailable: avail.available });
+    const checklist = decideChecklist({ weightGrams: india.weightGrams, sellerCount });
+    const oLabels = originLabels(origin), cLabels = checklistLabels(checklist);
+    rec.sellerCount = sellerCount; rec.indiaAvailable = avail.available; rec.availSites = avail.sites;
+    rec.origin = origin; rec.checklist = checklist;
+    log(`${asin}: origin[${oLabels.join(',')}] checklist[${cLabels.join(',')}] sellers=${sellerCount ?? '—'} india=${avail.available ? avail.sites.join('/') : 'no'}`, 'info', asin);
+
+    if (settings.dryRun) {
+      log(`${asin}: DRY-RUN would tick Origin ${oLabels.join('+')} & Checklist ${cLabels.join('+')}`, 'info', asin);
+      return;
+    }
+    await ctx.focusDashboard?.();
+    const or = await ctx.sendToDashboard({ type: 'SET_ORIGIN', asin, labels: oLabels });
+    rec.originOk = !!or?.ok;
+    if (!or?.ok) { rec.flags.push(`origin tick incomplete (${(or?.failed || []).join(',') || or?.error || '?'})`); log(`${asin}: Origin tick failed — ${or?.error || (or?.failed || []).join(',')}`, 'warn', asin); }
+    else if ((or.added || []).length) log(`${asin}: Origin ticked ${or.added.join('+')}`, 'ok', asin);
+
+    const cr = await ctx.sendToDashboard({ type: 'SET_CHECKLIST', asin, labels: cLabels });
+    rec.checklistOk = !!cr?.ok;
+    if (!cr?.ok) { rec.flags.push(`checklist tick incomplete (${(cr?.failed || []).join(',') || cr?.error || '?'})`); log(`${asin}: Checklist tick failed — ${cr?.error || (cr?.failed || []).join(',')}`, 'warn', asin); }
+    else if ((cr.added || []).length) log(`${asin}: Checklist ticked ${cr.added.join('+')}`, 'ok', asin);
   }
 
   // ---- FAILED file: fill/correct EVERY field, then peek verdict + move -----

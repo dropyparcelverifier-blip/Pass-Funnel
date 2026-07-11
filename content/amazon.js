@@ -388,6 +388,33 @@
     return (canon || location.href).split('?')[0];
   }
 
+  // ===================== Unique seller count (Multi check) ==================
+  // Counts distinct sellers for an ASIN. Best read on the offer-listing / AOD
+  // page (…/gp/offer-listing/ASIN or the "See All Buying Options" panel), where
+  // each offer carries a sold-by seller. Falls back to on-page "(N) offers".
+  function scrapeSellers() {
+    const ids = new Set();
+    // 1) Seller identity from sold-by links (seller= param) across all offers.
+    document.querySelectorAll('a[href*="seller="], a[href*="/sp?"], a[href*="/gp/help/seller"]').forEach(a => {
+      const m = (a.getAttribute('href') || '').match(/seller=([A-Z0-9]+)/i);
+      if (m) ids.add('id:' + m[1].toUpperCase());
+      else { const t = clip(a.textContent, 60).toLowerCase(); if (t && t.length > 1) ids.add('nm:' + t); }
+    });
+    let count = ids.size;
+    // 2) Distinct offer blocks (AOD / legacy OLP).
+    if (!count) {
+      const offers = document.querySelectorAll('#aod-offer, [id^="aod-offer-"], .olpOffer, #aod-offer-list > *');
+      count = offers.length || 0;
+    }
+    // 3) Text hint: "New & Used (12) from", "12 offers", "New (7)".
+    if (!count) {
+      const bt = document.body?.innerText || '';
+      const m = bt.match(/\(\s*(\d+)\s*\)\s*(?:new|used|from|offers?)/i) || bt.match(/(\d+)\s+offers?\b/i);
+      if (m) count = parseInt(m[1], 10);
+    }
+    return { count: Number.isFinite(count) && count > 0 ? count : null };
+  }
+
   // ====================== Search-results scraping ===========================
   function scrapeSearchResults() {
     const cards = document.querySelectorAll('[data-component-type="s-search-result"], [data-asin][data-component-type], div.s-result-item[data-asin]');
@@ -559,6 +586,12 @@
 
     if (type === 'DETECT_PAGE_TYPE') {
       try { sendResponse({ ok: true, pageType: detectPageType(), url: location.href }); }
+      catch (e) { sendResponse({ ok: false, error: e?.message || String(e) }); }
+      return false;
+    }
+
+    if (type === 'SCRAPE_SELLERS') {
+      try { const r = scrapeSellers(); log(`sellers: ${r.count ?? 'n/a'} unique`, 'ok'); sendResponse({ ok: true, count: r.count }); }
       catch (e) { sendResponse({ ok: false, error: e?.message || String(e) }); }
       return false;
     }

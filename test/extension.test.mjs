@@ -43,6 +43,12 @@ function makeEnv(opts = {}) {
       const data = /amazon\.in/.test(url) ? indiaData(asin) : usaData(asin, env.usLocSet);
       return Promise.resolve({ ok: true, data });
     }
+    if (msg.type === 'SCRAPE_SELLERS') return Promise.resolve({ ok: true, count: opts.sellerCount ?? null });
+    if (msg.type === 'MP_SEARCH_SCRAPE') {
+      const host = (String(url).match(/https?:\/\/([^/]+)/) || [])[1] || '';
+      const hit = (opts.availableHosts || []).includes(host);
+      return Promise.resolve({ ok: true, titles: hit ? [opts.productTitle || 'Glass Seed Beads White'] : [] });
+    }
     return Promise.resolve({ ok: false, error: 'unhandled ' + msg.type });
   }
 
@@ -73,7 +79,7 @@ function makeEnv(opts = {}) {
 
 function makeDashboard(rows, verdicts = {}) {
   const calls = { byAsin: {}, all: [] };
-  const rec = a => (calls.byAsin[a] ||= { writes: {}, funnel: null, category: null, peek: 0, move: 0 });
+  const rec = a => (calls.byAsin[a] ||= { writes: {}, funnel: null, category: null, peek: 0, move: 0, origin: null, checklist: null });
   async function sendToDashboard(m) {
     calls.all.push(m.type);
     switch (m.type) {
@@ -83,6 +89,8 @@ function makeDashboard(rows, verdicts = {}) {
       case 'WRITE_FIELD': rec(m.asin).writes[m.field] = m.value; return { ok: true, corrected: true, now: m.value };
       case 'SET_FUNNEL': rec(m.asin).funnel = m.funnel; return { ok: true, changed: true, current: 'DP' };
       case 'SELECT_CATEGORY': rec(m.asin).category = m.category; return { ok: true, chosen: m.category };
+      case 'SET_ORIGIN': rec(m.asin).origin = m.labels; return { ok: true, added: m.labels, current: m.labels };
+      case 'SET_CHECKLIST': rec(m.asin).checklist = m.labels; return { ok: true, added: m.labels, current: m.labels };
       case 'CLICK_PASS': {
         const v = verdicts[m.asin] || 'pass';
         if (m.opts && m.opts.peek) { rec(m.asin).peek++; return { ok: true, verdict: v, peeked: true }; }
@@ -174,6 +182,40 @@ test('FUNCTIONAL: multi-marketplace query, similarity, availability', async () =
   assert.deepEqual(cfg.decideIndiaAvailable([]), { available: false, sites: [] });
 });
 
+test('FUNCTIONAL: chip label maps use dashboard wording (US/India, Expire)', async () => {
+  const cfg = await import(configUrl);
+  assert.deepEqual(cfg.originLabels({ us: true, in: true }), ['US', 'India']);
+  assert.deepEqual(cfg.originLabels({ us: true, in: false }), ['US']);
+  assert.deepEqual(cfg.checklistLabels({ expiry: true, size: true, multi: true }), ['Expire', 'Size', 'Multi']);
+  assert.deepEqual(cfg.checklistLabels({ expiry: true, size: false, multi: false }), ['Expire']);
+});
+
+test('USER: pass-file enrichment ticks Origin US+India and Checklist Expire+Size+Multi', async () => {
+  const rows = [R('B0AAAA1111', { title: 'Glass Seed Beads White', brand: 'Mill Hill' })];
+  const { engine, dash } = await runEngine({
+    rows, settings: { mode: 'pass' },
+    env: { sellerCount: 9, availableHosts: ['www.flipkart.com'], productTitle: 'Glass Seed Beads White' },
+  });
+  await waitDone(engine);
+  const a = dash.calls.byAsin.B0AAAA1111;
+  assert.deepEqual(a.origin, ['US', 'India'], 'US always + India (found on Flipkart)');
+  assert.deepEqual(a.checklist, ['Expire', 'Size', 'Multi'], 'Expire always + Size(<700g) + Multi(9>5)');
+});
+
+test('USER: pass-file enrichment omits India + Multi + Size when rules fail', async () => {
+  const rows = [R('B0GGGG7777', { title: 'Obscure Item XYZ', brand: 'NoBrand' })];
+  const { engine, dash } = await runEngine({
+    rows, settings: { mode: 'pass' },
+    env: { sellerCount: 3, availableHosts: [],   // not found anywhere; only 3 sellers
+      indiaData: (asin) => ({ asin, bsrPrimary: 12345, bsrPrimaryCategory: 'Beauty', categoryPath: ['Beauty'],
+        weightGrams: 900, priceValue: 499, currency: 'INR', canonicalUrl: `https://www.amazon.in/dp/${asin}` }) },
+  });
+  await waitDone(engine);
+  const a = dash.calls.byAsin.B0GGGG7777;
+  assert.deepEqual(a.origin, ['US'], 'US only (not sellable in India)');
+  assert.deepEqual(a.checklist, ['Expire'], 'Expire only (900g not <700, 3 sellers not >5)');
+});
+
 test('FUNCTIONAL: category matcher precedence + remark text', async () => {
   const cfg = await import(configUrl);
   assert.equal(cfg.thresholdFor('Beauty & Personal Care', '').key, 'beauty');
@@ -232,7 +274,7 @@ test('USER: failed-file run moves passing rows, leaves failing rows', async () =
 });
 
 test('USER: pass-file run touches funnel + remark ONLY', async () => {
-  const { engine, dash } = await runEngine({ rows: [R('B0DDDD4444')], settings: { mode: 'pass' } });
+  const { engine, dash } = await runEngine({ rows: [R('B0DDDD4444')], settings: { mode: 'pass', passEnrich: false } });
   const st = await waitDone(engine);
   const d = dash.calls.byAsin.B0DDDD4444;
   assert.deepEqual(Object.keys(d.writes), ['remark']);
@@ -285,7 +327,7 @@ test('REGRESSION: CAPTCHA is detected via pageType and pauses the run', async ()
 });
 
 test('REGRESSION: pass mode never writes weight/inr/usd/source', async () => {
-  const { engine, dash } = await runEngine({ rows: [R('B0DDDD4444')], settings: { mode: 'pass' } });
+  const { engine, dash } = await runEngine({ rows: [R('B0DDDD4444')], settings: { mode: 'pass', passEnrich: false } });
   await waitDone(engine);
   const w = dash.calls.byAsin.B0DDDD4444.writes;
   assert.equal(w.weight, undefined);
