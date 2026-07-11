@@ -25,8 +25,9 @@ const rand = (a, b) => Math.round(a + Math.random() * (b - a));
 const IN_ORIGIN = 'https://www.amazon.in';
 const US_ORIGIN = 'https://www.amazon.com';
 // Fields the dashboard requires before it shows "Move Pass" (used by the
-// failed-file verdict peek).
-const REQUIRED_FIELDS = ['weight', 'inr', 'usd', 'sourceLink', 'category'];
+// failed-file verdict peek). No Source Link column exists on this dashboard —
+// the USA Link is the source and is already populated.
+const REQUIRED_FIELDS = ['weight', 'inr', 'usd', 'category'];
 
 export function createEngine(ctx) {
   // ctx: { log, emit, sendToDashboard, getWorkingWindowId, focusDashboard }
@@ -374,7 +375,7 @@ export function createEngine(ctx) {
       log(`${asin}: amazon.in scrape failed — ${e.message}`, 'err', asin);
     }
 
-    // 2) Scrape amazon.com (USD + source link) — needs the row's USA link.
+    // 2) Scrape amazon.com (USD) — needs the row's USA link.
     let usa = {};
     if (row.usaUrl && /amazon\.com/.test(row.usaUrl)) {
       setStep('scrape amazon.com', asin);
@@ -386,8 +387,8 @@ export function createEngine(ctx) {
         log(`${asin}: amazon.com scrape failed — ${e.message}`, 'err', asin);
       }
     } else {
-      rec.flags.push('no USA link — USD/source not set');
-      log(`${asin}: no amazon.com link on the row — USD + source link can't be filled`, 'warn', asin);
+      rec.flags.push('no USA link — USD not set');
+      log(`${asin}: no amazon.com link on the row — USD can't be filled`, 'warn', asin);
     }
 
     // 3) Compute funnel + remark from India BSR.
@@ -400,22 +401,26 @@ export function createEngine(ctx) {
     const usd = (usa.currency === 'USD' && Number.isFinite(usa.priceValue)) ? usa.priceValue : null;
     const weight = Number.isFinite(india.weightGrams) ? india.weightGrams : null;
     const category = bsrCat || bcRoot || '';
-    const srcUrl = settings.sourceLinkHost === 'in'
-      ? (india.canonicalUrl || `${IN_ORIGIN}/dp/${asin}`)
-      : (usa.canonicalUrl || '');
-    rec.weight = weight; rec.inr = inr; rec.usd = usd; rec.sourceLink = srcUrl;
+    rec.weight = weight; rec.inr = inr; rec.usd = usd;
     log(`${asin}: ${reason} | weight=${weight ?? '—'}g INR=${inr ?? '—'} USD=${usd ?? '—'} cat="${category || '—'}"`, 'info', asin);
     if (usd == null && row.usaUrl) { rec.flags.push('USD unavailable from amazon.com'); log(`${asin}: USD not found on the .com page (unavailable / parse miss)`, 'warn', asin); }
 
+    // Cross-check weight from both marketplaces — a big gap usually means a wrong
+    // .com match or a parse error. Flag it (keep the amazon.in weight as written).
+    const usWeight = Number.isFinite(usa.weightGrams) ? usa.weightGrams : null;
+    rec.weightIn = weight; rec.weightUs = usWeight;
+    if (weight != null && usWeight != null) {
+      const diff = Math.abs(weight - usWeight) / Math.max(weight, usWeight);
+      if (diff > 0.15) { rec.flags.push(`weight mismatch: IN ${weight}g vs US ${usWeight}g`); log(`${asin}: weight mismatch — amazon.in ${weight}g vs amazon.com ${usWeight}g (${Math.round(diff * 100)}% apart)`, 'warn', asin); }
+    }
+
     // 4) Fill / correct every field. Focus the dashboard first for live writes.
+    // (No Source Link column on this dashboard — the USA Link is the source.)
     if (!settings.dryRun) await ctx.focusDashboard?.();
 
     setStep('weight', asin);   await writeCell(asin, 'weight', weight, rec, settings, 'Weight');
     setStep('INR', asin);      await writeCell(asin, 'inr', inr, rec, settings, 'INR');
     setStep('USD', asin);      await writeCell(asin, 'usd', usd, rec, settings, 'USD');
-    setStep('source link', asin);
-    if (srcUrl) await writeCell(asin, 'sourceLink', srcUrl, rec, settings, 'Source link');
-    else { rec.flags.push('source link not set'); }
 
     // Category — a real dropdown; SELECT_CATEGORY fuzzy-matches the option list.
     setStep('category', asin);
@@ -448,6 +453,11 @@ export function createEngine(ctx) {
       await writeCell(asin, 'remark', remark, rec, settings, 'Remark');
     }
 
+    // Origin + Checklist enrichment (same as the Pass file).
+    if (settings.passEnrich) {
+      await enrichPassRow(row, rec, india, settings);
+    }
+
     // 5) Peek the verdict; Move Pass only if the dashboard says it now passes.
     setStep('verdict', asin);
     if (settings.dryRun) {
@@ -455,7 +465,6 @@ export function createEngine(ctx) {
         if (f === 'weight') return weight == null;
         if (f === 'inr') return inr == null;
         if (f === 'usd') return usd == null;
-        if (f === 'sourceLink') return !srcUrl;
         if (f === 'category') return !category;
         return false;
       });

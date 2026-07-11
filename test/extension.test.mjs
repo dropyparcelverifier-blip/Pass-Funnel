@@ -245,7 +245,7 @@ test('FUNCTIONAL: failed mode fills every field from .in + .com', async () => {
   assert.equal(a.writes.weight, '200');
   assert.equal(a.writes.inr, '499');
   assert.equal(a.writes.usd, '9.99');
-  assert.match(a.writes.sourceLink, /amazon\.com\/dp\/B0AAAA1111/);
+  assert.equal(a.writes.sourceLink, undefined, 'no Source Link column on this dashboard');
   assert.ok(a.writes.remark);
   assert.equal(a.funnel, 'RS');
   assert.equal(a.category, 'Beauty & Personal Care');
@@ -257,12 +257,6 @@ test('FUNCTIONAL: scrapeUsa re-sets US location when .com shows ₹', async () =
   await waitDone(engine);
   assert.equal(env.usLocSet, true, 'engine set the US location');
   assert.equal(dash.calls.byAsin.B0AAAA1111.writes.usd, '9.99', 'USD captured after re-scrape');
-});
-
-test('FUNCTIONAL: sourceLinkHost=in writes the .in URL', async () => {
-  const { engine, dash } = await runEngine({ rows: [R('B0AAAA1111')], verdicts: { B0AAAA1111: 'pass' }, settings: { mode: 'failed', sourceLinkHost: 'in' } });
-  await waitDone(engine);
-  assert.match(dash.calls.byAsin.B0AAAA1111.writes.sourceLink, /amazon\.in\/dp\/B0AAAA1111/);
 });
 
 test('FUNCTIONAL: getRecords exposes the per-row audit fields', async () => {
