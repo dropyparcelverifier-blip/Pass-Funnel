@@ -284,7 +284,7 @@ export function createEngine(ctx) {
       } else {
         const wr = await ctx.sendToDashboard({ type: 'WRITE_FIELD', asin, field: 'remark', value: remark });
         rec.remarkOk = !!wr?.ok;
-        if (!wr?.ok) { rec.flags.push('remark write failed'); log(`${asin}: Remark write failed${wr?.cellHtml ? ' (cell captured)' : ''}`, 'warn', asin); }
+        if (!wr?.ok) { rec.flags.push('remark write failed'); log(`${asin}: Remark write failed — ${wr?.error || '?'}${wr?.cellHtml ? ' | CELL: ' + wr.cellHtml : ''}`, 'warn', asin); }
       }
     }
 
@@ -335,12 +335,13 @@ export function createEngine(ctx) {
     await ctx.focusDashboard?.();
     const or = await ctx.sendToDashboard({ type: 'SET_ORIGIN', asin, labels: oLabels });
     rec.originOk = !!or?.ok;
-    if (!or?.ok) { rec.flags.push(`origin tick incomplete (${(or?.failed || []).join(',') || or?.error || '?'})`); log(`${asin}: Origin tick failed — ${or?.error || (or?.failed || []).join(',')}`, 'warn', asin); }
+    const dump = (r) => r?.menuHtml ? ' | MENU: ' + r.menuHtml : (r?.cellHtml ? ' | CELL: ' + r.cellHtml : '');
+    if (!or?.ok) { rec.flags.push(`origin tick incomplete (${(or?.failed || []).join(',') || or?.error || '?'})`); log(`${asin}: Origin tick failed — ${or?.error || (or?.failed || []).join(',')}${dump(or)}`, 'warn', asin); }
     else if ((or.added || []).length) log(`${asin}: Origin ticked ${or.added.join('+')}`, 'ok', asin);
 
     const cr = await ctx.sendToDashboard({ type: 'SET_CHECKLIST', asin, labels: cLabels });
     rec.checklistOk = !!cr?.ok;
-    if (!cr?.ok) { rec.flags.push(`checklist tick incomplete (${(cr?.failed || []).join(',') || cr?.error || '?'})`); log(`${asin}: Checklist tick failed — ${cr?.error || (cr?.failed || []).join(',')}`, 'warn', asin); }
+    if (!cr?.ok) { rec.flags.push(`checklist tick incomplete (${(cr?.failed || []).join(',') || cr?.error || '?'})`); log(`${asin}: Checklist tick failed — ${cr?.error || (cr?.failed || []).join(',')}${dump(cr)}`, 'warn', asin); }
     else if ((cr.added || []).length) log(`${asin}: Checklist ticked ${cr.added.join('+')}`, 'ok', asin);
   }
 

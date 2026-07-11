@@ -174,12 +174,20 @@
     const cell = cellForField(grid, row, field);
     if (!cell) return { ok: false, error: `no column mapped for field "${field}" (headers: ${grid.headers.map(h => clip(h.text, 20)).join(', ')})` };
 
-    let input = cell.querySelector('input:not([type="checkbox"]):not([type="hidden"]), textarea');
+    const findInput = () => cell.querySelector('input:not([type="checkbox"]):not([type="hidden"]), textarea');
+    let input = findInput();
     if (!input) {
       // Cell may need a click to reveal an inline editor.
       try { cell.click(); } catch {}
       await sleep(150);
-      input = cell.querySelector('input:not([type="checkbox"]):not([type="hidden"]), textarea');
+      input = findInput();
+    }
+    if (!input) {
+      // Or a pencil/edit button to enter edit mode (like the link cells).
+      const edit = Array.from(cell.querySelectorAll('button, [role="button"], svg[class*="edit" i], [class*="edit" i], [class*="pencil" i], [aria-label*="edit" i], [title*="edit" i]'))
+        .map(e => e.closest('button') || e)
+        .find(e => isVisible(e));
+      if (edit) { realClick(edit); await sleep(250); input = findInput(); }
     }
     if (input) {
       const prev = input.value;
@@ -218,7 +226,7 @@
       ce.dispatchEvent(new Event('blur', { bubbles: true }));
       return { ok: true, via: 'contenteditable' };
     }
-    return { ok: false, error: `no editable element in "${field}" cell — text="${clip(cell.textContent, 40)}"` };
+    return { ok: false, error: `no editable element in "${field}" cell — text="${clip(cell.textContent, 40)}"`, cellHtml: clip(cell.outerHTML, 900) };
   }
 
   // Compare a cell's CURRENT value to the value we tried to write. Numeric for
