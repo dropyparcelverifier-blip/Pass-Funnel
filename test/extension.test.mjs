@@ -140,6 +140,19 @@ test('FUNCTIONAL: decideFunnel across categories', async () => {
   assert.equal(cfg.decideFunnel(55000, 'Unknown', 'Misc').funnel, 'DP');
 });
 
+test('FUNCTIONAL: Pass-file Origin + Checklist decision rules', async () => {
+  const cfg = await import(configUrl);
+  // Origin: US always; IN only when sellable in India.
+  assert.deepEqual(cfg.decideOrigin({ indiaAvailable: true }), { us: true, in: true });
+  assert.deepEqual(cfg.decideOrigin({ indiaAvailable: false }), { us: true, in: false });
+  assert.deepEqual(cfg.decideOrigin({}), { us: true, in: false });
+  // Checklist: Expiry always; Size when weight < 700 g; Multi when sellers > 5.
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: 200, sellerCount: 9 }), { expiry: true, size: true, multi: true });
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: 700, sellerCount: 5 }), { expiry: true, size: false, multi: false });
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: 699, sellerCount: 6 }), { expiry: true, size: true, multi: true });
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: null, sellerCount: null }), { expiry: true, size: false, multi: false });
+});
+
 test('FUNCTIONAL: category matcher precedence + remark text', async () => {
   const cfg = await import(configUrl);
   assert.equal(cfg.thresholdFor('Beauty & Personal Care', '').key, 'beauty');

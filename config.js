@@ -79,6 +79,30 @@ export function remarkText(bsr, bsrCategory) {
 }
 
 // ---------------------------------------------------------------------------
+// Pass-file ORIGIN + CHECKLIST enrichment (Scrappy v2 dashboard columns).
+//   Origin    → multi-select chips: US (always) + IN (when sellable in India).
+//   Checklist → multi-select: Expiry (always), Size (weight < 700 g),
+//               Multi (unique sellers > 5, read from amazon.in buying options).
+// ---------------------------------------------------------------------------
+export const SIZE_MAX_GRAMS = 700;      // Size ticked when weight is UNDER this.
+export const MULTI_MIN_SELLERS = 5;     // Multi ticked when sellers exceed this.
+
+// Which Origin chips to tick. `indiaAvailable` = the product is sellable in
+// India (amazon.in live product; extend to other marketplaces later).
+export function decideOrigin({ indiaAvailable } = {}) {
+  return { us: true, in: !!indiaAvailable };
+}
+
+// Which Checklist boxes to tick.
+export function decideChecklist({ weightGrams, sellerCount } = {}) {
+  return {
+    expiry: true,
+    size: Number.isFinite(weightGrams) && weightGrams < SIZE_MAX_GRAMS,
+    multi: Number.isFinite(sellerCount) && sellerCount > MULTI_MIN_SELLERS,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Defaults (overridable from the side-panel Settings tab, persisted under K.SETTINGS).
 // ---------------------------------------------------------------------------
 export const DEFAULT_SETTINGS = {

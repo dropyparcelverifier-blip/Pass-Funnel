@@ -95,6 +95,12 @@
     category:   /\bcategory\b/i,
     status:     /\bstatus\b/i,
     remark:     /\bremark\b|\bnote\b|\bcomment\b/i,
+    // Scrappy v2 Pass-file columns:
+    sellers:    /\bsellers\b/i,        // numeric count (plural — not "Seller Tag")
+    origin:     /\borigin\b/i,         // multi-select chips: US / IN
+    checklist:  /\bcheck\s*list\b/i,   // multi-select: Expiry / Size / Multi
+    channel:    /\bchannel\b/i,
+    zone:       /\bzone\b/i,
   };
   function guessColumns(headers) {
     const out = {};
