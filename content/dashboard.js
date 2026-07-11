@@ -466,8 +466,10 @@
     let missing = want.filter(w => !chips().some(c => norm(c) === norm(w)));
     if (!missing.length) return { ok: true, current: chips(), added: [], already: want };
 
-    realClick(trigger); await sleep(350);                 // open the menu
-    const menu = _openMenu();
+    // Open the menu with a SINGLE native click (realClick fires click twice,
+    // which toggles a dropdown open→closed). Retry a couple times if needed.
+    let menu = _openMenu();
+    for (let i = 0; i < 3 && !menu; i++) { try { trigger.click(); } catch {} await sleep(300); menu = _openMenu(); }
     if (!menu) return { ok: false, error: `${field} menu did not open`, cellHtml: clip(cell.outerHTML, 900) };
     const labels = Array.from(menu.querySelectorAll('label'));
     const added = [], failed = [];
