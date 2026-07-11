@@ -90,14 +90,14 @@ export const MULTI_MIN_SELLERS = 5;     // Multi ticked when sellers exceed this
 // Exact dashboard chip labels (from the Scrappy v2 menus). Origin uses "US" /
 // "India" (NOT "IN"); Checklist uses "Expire" (NOT "Expiry").
 export const ORIGIN_LABELS = { us: 'US', in: 'India' };
-export const CHECKLIST_LABELS = { expiry: 'Expire', size: 'Size', multi: 'Multi' };
+export const CHECKLIST_LABELS = { brand: 'Brand', expiry: 'Expire', size: 'Size', multi: 'Multi' };
 
 // Turn a decideOrigin/decideChecklist result into the list of labels to tick.
 export function originLabels(origin) {
   return [origin.us && ORIGIN_LABELS.us, origin.in && ORIGIN_LABELS.in].filter(Boolean);
 }
 export function checklistLabels(checklist) {
-  return [checklist.expiry && CHECKLIST_LABELS.expiry, checklist.size && CHECKLIST_LABELS.size, checklist.multi && CHECKLIST_LABELS.multi].filter(Boolean);
+  return [checklist.brand && CHECKLIST_LABELS.brand, checklist.expiry && CHECKLIST_LABELS.expiry, checklist.size && CHECKLIST_LABELS.size, checklist.multi && CHECKLIST_LABELS.multi].filter(Boolean);
 }
 
 // Which Origin chips to tick. `indiaAvailable` = the product is sellable in
@@ -106,12 +106,15 @@ export function decideOrigin({ indiaAvailable } = {}) {
   return { us: true, in: !!indiaAvailable };
 }
 
-// Which Checklist boxes to tick.
+// Which Checklist boxes to tick. Brand and Multi share the same trigger
+// (more than MULTI_MIN_SELLERS unique sellers), so they tick together.
 export function decideChecklist({ weightGrams, sellerCount } = {}) {
+  const manySellers = Number.isFinite(sellerCount) && sellerCount > MULTI_MIN_SELLERS;
   return {
+    brand: manySellers,
     expiry: true,
     size: Number.isFinite(weightGrams) && weightGrams < SIZE_MAX_GRAMS,
-    multi: Number.isFinite(sellerCount) && sellerCount > MULTI_MIN_SELLERS,
+    multi: manySellers,
   };
 }
 

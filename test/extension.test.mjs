@@ -154,11 +154,11 @@ test('FUNCTIONAL: Pass-file Origin + Checklist decision rules', async () => {
   assert.deepEqual(cfg.decideOrigin({ indiaAvailable: true }), { us: true, in: true });
   assert.deepEqual(cfg.decideOrigin({ indiaAvailable: false }), { us: true, in: false });
   assert.deepEqual(cfg.decideOrigin({}), { us: true, in: false });
-  // Checklist: Expiry always; Size when weight < 700 g; Multi when sellers > 5.
-  assert.deepEqual(cfg.decideChecklist({ weightGrams: 200, sellerCount: 9 }), { expiry: true, size: true, multi: true });
-  assert.deepEqual(cfg.decideChecklist({ weightGrams: 700, sellerCount: 5 }), { expiry: true, size: false, multi: false });
-  assert.deepEqual(cfg.decideChecklist({ weightGrams: 699, sellerCount: 6 }), { expiry: true, size: true, multi: true });
-  assert.deepEqual(cfg.decideChecklist({ weightGrams: null, sellerCount: null }), { expiry: true, size: false, multi: false });
+  // Checklist: Expiry always; Size when weight < 700 g; Brand+Multi when sellers > 5.
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: 200, sellerCount: 9 }), { brand: true, expiry: true, size: true, multi: true });
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: 700, sellerCount: 5 }), { brand: false, expiry: true, size: false, multi: false });
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: 699, sellerCount: 6 }), { brand: true, expiry: true, size: true, multi: true });
+  assert.deepEqual(cfg.decideChecklist({ weightGrams: null, sellerCount: null }), { brand: false, expiry: true, size: false, multi: false });
 });
 
 test('FUNCTIONAL: multi-marketplace query, similarity, availability', async () => {
@@ -186,8 +186,8 @@ test('FUNCTIONAL: chip label maps use dashboard wording (US/India, Expire)', asy
   const cfg = await import(configUrl);
   assert.deepEqual(cfg.originLabels({ us: true, in: true }), ['US', 'India']);
   assert.deepEqual(cfg.originLabels({ us: true, in: false }), ['US']);
-  assert.deepEqual(cfg.checklistLabels({ expiry: true, size: true, multi: true }), ['Expire', 'Size', 'Multi']);
-  assert.deepEqual(cfg.checklistLabels({ expiry: true, size: false, multi: false }), ['Expire']);
+  assert.deepEqual(cfg.checklistLabels({ brand: true, expiry: true, size: true, multi: true }), ['Brand', 'Expire', 'Size', 'Multi']);
+  assert.deepEqual(cfg.checklistLabels({ brand: false, expiry: true, size: false, multi: false }), ['Expire']);
 });
 
 test('USER: enrichment ticks India from a LIVE amazon.in page (no search needed)', async () => {
@@ -200,7 +200,7 @@ test('USER: enrichment ticks India from a LIVE amazon.in page (no search needed)
   await waitDone(engine);
   const a = dash.calls.byAsin.B0AAAA1111;
   assert.deepEqual(a.origin, ['US', 'India'], 'India from live .in page');
-  assert.deepEqual(a.checklist, ['Expire', 'Size', 'Multi'], 'Expire + Size(<700g) + Multi(9>5)');
+  assert.deepEqual(a.checklist, ['Brand', 'Expire', 'Size', 'Multi'], 'Brand + Expire + Size(<700g) + Multi(9>5)');
 });
 
 test('USER: enrichment falls back to marketplace search when .in page is dead', async () => {
