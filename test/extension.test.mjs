@@ -148,6 +148,25 @@ test('FUNCTIONAL: decideFunnel across categories', async () => {
   assert.equal(cfg.decideFunnel(55000, 'Unknown', 'Misc').funnel, 'DP');
 });
 
+test('FUNCTIONAL: Amazon category → dashboard taxonomy mapping', async () => {
+  const cfg = await import(configUrl);
+  // The exact cases that failed in the live Failed-file run:
+  assert.equal(cfg.mapCategory('Health & Personal Care'), 'Health - Other Products');
+  assert.equal(cfg.mapCategory('Grocery & Gourmet Foods'), 'Grocery and Gourmet - Other Products');
+  assert.equal(cfg.mapCategory('Pet Supplies'), 'Pet - Other Products');
+  assert.equal(cfg.mapCategory('Car & Motorbike'), 'Automotive - Other Products');
+  assert.equal(cfg.mapCategory('Computers & Accessories'), 'Accessories Electronics PC Wireless');
+  assert.equal(cfg.mapCategory('Beauty'), 'Beauty - Other Products');
+  assert.equal(cfg.mapCategory('Books'), 'Books');
+  assert.equal(cfg.mapCategory('Home & Kitchen'), 'Home - Other Products');
+  assert.equal(cfg.mapCategory('Musical Instruments'), 'Musical Instruments - Other Products');
+  assert.equal(cfg.mapCategory('Baby Products'), 'Baby - Other Products');
+  // beauty must win over the "personal care" health rule
+  assert.equal(cfg.mapCategory('Beauty & Personal Care'), 'Beauty - Other Products');
+  assert.equal(cfg.mapCategory(''), '');
+  assert.equal(cfg.mapCategory('Totally Unknown Xyz'), '');
+});
+
 test('FUNCTIONAL: Pass-file Origin + Checklist decision rules', async () => {
   const cfg = await import(configUrl);
   // Origin: US always; IN only when sellable in India.
@@ -248,7 +267,7 @@ test('FUNCTIONAL: failed mode fills every field from .in + .com', async () => {
   assert.equal(a.writes.sourceLink, undefined, 'no Source Link column on this dashboard');
   assert.ok(a.writes.remark);
   assert.equal(a.funnel, 'RS');
-  assert.equal(a.category, 'Beauty & Personal Care');
+  assert.equal(a.category, 'Beauty - Other Products', 'Amazon "Beauty & Personal Care" mapped to dashboard taxonomy');
 });
 
 test('FUNCTIONAL: scrapeUsa re-sets US location when .com shows ₹', async () => {

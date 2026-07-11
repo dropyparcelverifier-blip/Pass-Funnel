@@ -14,7 +14,7 @@
 // resume after a stop and AUTO-resume after a crash/restart.
 
 import {
-  K, getSettings, decideFunnel, remarkText,
+  K, getSettings, decideFunnel, remarkText, mapCategory,
   decideOrigin, decideChecklist, decideIndiaAvailable, originLabels, checklistLabels,
   availabilityQuery, titleSimilarity, MARKETPLACES, AVAILABILITY_SIM_THRESHOLD,
 } from '../config.js';
@@ -422,16 +422,18 @@ export function createEngine(ctx) {
     setStep('INR', asin);      await writeCell(asin, 'inr', inr, rec, settings, 'INR');
     setStep('USD', asin);      await writeCell(asin, 'usd', usd, rec, settings, 'USD');
 
-    // Category — a real dropdown; SELECT_CATEGORY fuzzy-matches the option list.
+    // Category — map Amazon's taxonomy to the dashboard's custom options, then
+    // select. Fall back to the raw text (fuzzy match) when nothing maps.
     setStep('category', asin);
     if (category) {
-      rec.category = category;
-      if (settings.dryRun) log(`${asin}: DRY-RUN category ← "${category}"`, 'info', asin);
+      const mapped = mapCategory(`${bsrCat} ${bcRoot}`) || category;
+      rec.category = mapped; rec.categoryRaw = category;
+      if (settings.dryRun) log(`${asin}: DRY-RUN category "${category}" → "${mapped}"`, 'info', asin);
       else {
-        const cr = await ctx.sendToDashboard({ type: 'SELECT_CATEGORY', asin, category });
+        const cr = await ctx.sendToDashboard({ type: 'SELECT_CATEGORY', asin, category: mapped });
         rec.categoryOk = !!cr?.ok;
-        if (!cr?.ok) { rec.flags.push(`category "${category}" did not match a dropdown option`); log(`${asin}: category "${category}" not applied — ${cr?.error || 'no match'}`, 'warn', asin); }
-        else log(`${asin}: category set → ${cr.chosen || category}`, 'ok', asin);
+        if (!cr?.ok) { rec.flags.push(`category "${mapped}" did not match a dropdown option`); log(`${asin}: category "${category}" → "${mapped}" not applied — ${cr?.error || 'no match'}`, 'warn', asin); }
+        else log(`${asin}: category "${category}" → ${cr.chosen || mapped}`, 'ok', asin);
       }
     }
 

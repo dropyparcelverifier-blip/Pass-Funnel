@@ -79,6 +79,61 @@ export function remarkText(bsr, bsrCategory) {
 }
 
 // ---------------------------------------------------------------------------
+// Amazon BSR/breadcrumb category → the dashboard's custom Category taxonomy.
+// Amazon's departments don't textually match the dashboard options, so map each
+// to its closest bucket (usually the department's "- Other Products" catch-all).
+// First matching regex wins — ORDER MATTERS (specific before generic). Targets
+// MUST be exact dashboard <option> labels. Returns '' when nothing sensible fits
+// (the engine then falls back to a fuzzy match on the raw text, else flags it).
+// ---------------------------------------------------------------------------
+const CATEGORY_MAP = [
+  [/home\s*&?\s*kitchen/i,                 'Home - Other Products'],
+  [/\bbeaut/i,                             'Beauty - Other Products'],
+  [/health|personal care|household|wellness|nutrition|supplement|vitamin/i, 'Health - Other Products'],
+  [/\bpet\b|pet supplies/i,                'Pet - Other Products'],
+  [/grocery|gourmet|\bfoods?\b|beverage|snack/i, 'Grocery and Gourmet - Other Products'],
+  [/musical instrument/i,                  'Musical Instruments - Other Products'],
+  [/baby|infant|nursery|diaper/i,          'Baby - Other Products'],
+  [/video game/i,                          'Video Games - Other Products'],
+  [/\btoys?\b|board game|puzzle|plush/i,   'Toys - Other Products'],
+  [/\bbooks?\b|textbook|kindle ebook/i,    'Books'],
+  [/\bmovie|film|blu-?ray|\bdvd\b|tv show/i, 'Movies'],
+  [/\bmusic\b|\bcd\b|vinyl/i,              'Music'],
+  [/software/i,                            'Software Products'],
+  [/camera|camcorder|\blens\b|photograph/i,'Camera and Camcorder'],
+  [/mobile|cell\s*phone|smartphone/i,      'Mobile Phones'],
+  [/laptop|notebook computer/i,            'Laptops'],
+  [/\btablet/i,                            'Tablets'],
+  [/headphone|earphone|headset|earbud/i,   'Headsets Headphones Earphones'],
+  [/\bspeaker/i,                           'Speakers'],
+  [/\bwatch/i,                             'Watches'],
+  [/computer|\bpc\b|desktop|keyboard|mouse|monitor/i, 'Accessories Electronics PC Wireless'],
+  [/electronic/i,                          'Electronic Devices excl TV Camera'],
+  [/car|motorbike|motorcycle|automotive|vehicle/i, 'Automotive - Other Products'],
+  [/sport|fitness|\boutdoor|exercise|\bgym\b/i, 'Sports - Other Products'],
+  [/office|stationer/i,                    'Office - Other Products'],
+  [/shoe|footwear|sneaker/i,               'Shoes'],
+  [/jewel/i,                               'Fashion Jewellery'],
+  [/luggage|suitcase|\btravel\b/i,         'Luggage - Other Products'],
+  [/handbag|backpack|\bbag\b/i,            'Handbags'],
+  [/clothing|apparel|fashion|garment|\bwear\b/i, 'Apparel - Other Products'],
+  [/lawn|garden|patio/i,                   'Lawn Garden - Other Products'],
+  [/home improvement|hardware|\btools?\b/i,'Home Improvement - Other Products'],
+  [/furniture/i,                           'Furniture - Other Products'],
+  [/kitchen|cookware|dinnerware|tableware/i,'Kitchen - Other Products'],
+  [/industrial|scientific|business/i,      'Business Industrial - Other Products'],
+  [/\bhome\b|furnishing|d[eé]cor/i,        'Home - Other Products'],
+];
+
+// Map an Amazon category / breadcrumb string to an exact dashboard option label.
+export function mapCategory(amazonCategory) {
+  const text = String(amazonCategory || '');
+  if (!text.trim()) return '';
+  for (const [re, target] of CATEGORY_MAP) if (re.test(text)) return target;
+  return '';
+}
+
+// ---------------------------------------------------------------------------
 // Pass-file ORIGIN + CHECKLIST enrichment (Scrappy v2 dashboard columns).
 //   Origin    → multi-select chips: US (always) + IN (when sellable in India).
 //   Checklist → multi-select: Expiry (always), Size (weight < 700 g),
