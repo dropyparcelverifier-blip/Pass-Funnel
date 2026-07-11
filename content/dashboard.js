@@ -166,8 +166,48 @@
     return { ok: true, rows: out, columns: cols };
   }
 
+  // ============================== REMARK MODAL ==============================
+  // The Remark cell is a "+ Add" button that opens a MODAL with a
+  // <textarea placeholder="Enter remark…"> and a Close button (Esc to close) —
+  // NOT an inline cell input. Open it, type, close.
+  async function _waitEl(fn, ms) {
+    const t = Date.now();
+    while (Date.now() - t < ms) { const e = fn(); if (e) return e; await sleep(150); }
+    return null;
+  }
+  async function writeRemarkModal(asin, value) {
+    const { grid, row } = findRow(asin);
+    if (!grid) return { ok: false, error: 'no grid' };
+    if (!row) return { ok: false, error: `row not found for ASIN ${asin}` };
+    const cell = cellForField(grid, row, 'remark');
+    if (!cell) return { ok: false, error: 'no remark column' };
+
+    const opener = cell.querySelector('button, [role="button"]') || cell;
+    realClick(opener);
+    // The modal's textarea (portaled to <body>) — prefer the remark placeholder.
+    const ta = await _waitEl(() =>
+      document.querySelector('textarea[placeholder*="remark" i]') ||
+      document.querySelector('[role="dialog"] textarea, .modal textarea') ||
+      Array.from(document.querySelectorAll('textarea')).find(isVisible), 4000);
+    if (!ta) return { ok: false, error: 'remark modal did not open (no textarea)', cellHtml: clip(cell.outerHTML, 700) };
+
+    await typeIntoInput(ta, String(value));
+    await sleep(200);
+    const stuck = valuesMatch(ta.value, value);
+
+    // Close the modal: the "Close" button, else Escape.
+    const closeBtn = Array.from(document.querySelectorAll('button'))
+      .find(b => isVisible(b) && /^\s*close\s*$/i.test(clip(b.textContent, 20)));
+    if (closeBtn) realClick(closeBtn);
+    else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+    await sleep(300);
+
+    return { ok: stuck, via: 'remark-modal', now: clip(ta.value, 80), error: stuck ? undefined : `remark did not stick (now="${clip(ta.value, 40)}")` };
+  }
+
   // =============================== WRITE ====================================
   async function writeField(asin, field, value) {
+    if (field === 'remark') return writeRemarkModal(asin, value);
     const { grid, row } = findRow(asin);
     if (!grid) return { ok: false, error: 'no grid' };
     if (!row) return { ok: false, error: `row not found for ASIN ${asin}` };
