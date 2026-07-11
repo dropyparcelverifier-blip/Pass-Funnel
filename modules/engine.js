@@ -166,12 +166,22 @@ export function createEngine(ctx) {
   }
 
   // Count unique amazon.in sellers via the offer-listing page (Multi checkbox).
+  // Offers load lazily, so an early scrape can undercount (just the buybox = 1).
+  // Poll a few times and keep the MAX seen.
   async function scrapeSellerCount(asin, settings) {
     const url = `${IN_ORIGIN}/gp/offer-listing/${asin}`;
     await loadAmazon(url, settings);
     await detect();
-    const r = await tab.rpc({ type: 'SCRAPE_SELLERS' });
-    return Number.isFinite(r?.count) ? r.count : null;
+    let best = null;
+    for (let i = 0; i < 3; i++) {
+      checkControl();
+      const r = await tab.rpc({ type: 'SCRAPE_SELLERS' });
+      const c = Number.isFinite(r?.count) ? r.count : null;
+      if (c != null && (best == null || c > best)) best = c;
+      if (best != null && best >= 2) break;   // got a real offer list, stop early
+      await sleep(800);
+    }
+    return best;
   }
 
   // Search each enabled Indian marketplace by product name; a title similar
