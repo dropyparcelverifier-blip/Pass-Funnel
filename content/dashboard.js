@@ -191,24 +191,32 @@
       Array.from(document.querySelectorAll('textarea')).find(isVisible), 4000);
     if (!ta) return { ok: false, error: 'remark modal did not open (no textarea)', cellHtml: clip(cell.outerHTML, 700) };
 
+    const btnByText = (re) => Array.from(document.querySelectorAll('button')).find(b => isVisible(b) && re.test(clip(b.textContent, 20)));
+    const closeModal = () => {
+      const closeBtn = btnByText(/^\s*close\s*$/i);
+      if (closeBtn) realClick(closeBtn);
+      else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+    };
+
+    // Already holds this remark (from a prior run)? Then it's saved — typing the
+    // same text leaves the modal un-dirtied so Save never appears. No-op success.
+    if (valuesMatch(ta.value, value)) { closeModal(); await sleep(200); return { ok: true, via: 'remark-modal', already: true, now: clip(ta.value, 80) }; }
+
     await typeIntoInput(ta, String(value));
     await sleep(200);
     const stuck = valuesMatch(ta.value, value);
-    const btnByText = (re) => Array.from(document.querySelectorAll('button')).find(b => isVisible(b) && re.test(clip(b.textContent, 20)));
 
-    // SAVE first (the modal only persists on Save — Close alone discards).
-    const saveBtn = await _waitEl(() => btnByText(/^\s*save\s*$/i), 1500);
+    // SAVE (the modal only persists on Save — Close alone discards). Wait for the
+    // button to appear AND enable (it's disabled/absent until the text changes).
+    const saveBtn = await _waitEl(() => { const b = btnByText(/^\s*save\s*$/i); return (b && !(b.disabled || b.getAttribute('aria-disabled') === 'true')) ? b : null; }, 2500);
     let saved = false;
     if (saveBtn) { realClick(saveBtn); await sleep(500); saved = true; }
 
-    // Then close (Save may already close it; harmless if gone).
-    const closeBtn = btnByText(/^\s*close\s*$/i);
-    if (closeBtn) realClick(closeBtn);
-    else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+    closeModal();
     await sleep(300);
 
     return { ok: stuck && saved, via: 'remark-modal', now: clip(ta.value, 80),
-      error: !saved ? 'no Save button in remark modal' : (stuck ? undefined : `remark did not stick (now="${clip(ta.value, 40)}")`) };
+      error: !saved ? 'remark Save button never enabled' : (stuck ? undefined : `remark did not stick (now="${clip(ta.value, 40)}")`) };
   }
 
   // =============================== WRITE ====================================
