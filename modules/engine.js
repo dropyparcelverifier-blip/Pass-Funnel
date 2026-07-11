@@ -139,8 +139,10 @@ export function createEngine(ctx) {
 
   async function scrapeIndia(asin, url, settings) {
     await loadAmazon(url, settings);
-    await detect();
-    return (await tab.rpc({ type: 'SCRAPE_PRODUCT' }))?.data || {};
+    const pageType = await detect();
+    const data = (await tab.rpc({ type: 'SCRAPE_PRODUCT' }))?.data || {};
+    data._pageType = pageType;   // 'product' = live & sellable on amazon.in
+    return data;
   }
 
   // Scrape the amazon.com source page for the USD price. Forces a US delivery
@@ -307,18 +309,24 @@ export function createEngine(ctx) {
       catch (e) { if (e.stopped) throw e; rec.flags.push('seller count failed: ' + e.message); log(`${asin}: seller count failed — ${e.message}`, 'warn', asin); }
     }
 
+    // The product's OWN amazon.in page already proves India availability when
+    // it's a live product — no search needed. Only search the other Indian
+    // marketplaces when the .in page is dead (or when forced to always search).
+    const inLive = india._pageType === 'product';
     let avail = { available: false, sites: [] };
-    if (settings.checkAvailability) {
+    if (settings.checkAvailability && (!inLive || settings.alwaysSearchMarketplaces)) {
       try { avail = await checkIndiaAvailability(row, settings); }
       catch (e) { if (e.stopped) throw e; rec.flags.push('availability check failed: ' + e.message); log(`${asin}: availability check failed — ${e.message}`, 'warn', asin); }
     }
+    const indiaAvailable = inLive || avail.available;
+    const sites = [...(inLive ? ['amazon.in(page)'] : []), ...(avail.sites || [])];
 
-    const origin = decideOrigin({ indiaAvailable: avail.available });
+    const origin = decideOrigin({ indiaAvailable });
     const checklist = decideChecklist({ weightGrams: india.weightGrams, sellerCount });
     const oLabels = originLabels(origin), cLabels = checklistLabels(checklist);
-    rec.sellerCount = sellerCount; rec.indiaAvailable = avail.available; rec.availSites = avail.sites;
+    rec.sellerCount = sellerCount; rec.indiaAvailable = indiaAvailable; rec.availSites = sites;
     rec.origin = origin; rec.checklist = checklist;
-    log(`${asin}: origin[${oLabels.join(',')}] checklist[${cLabels.join(',')}] sellers=${sellerCount ?? '—'} india=${avail.available ? avail.sites.join('/') : 'no'}`, 'info', asin);
+    log(`${asin}: origin[${oLabels.join(',')}] checklist[${cLabels.join(',')}] sellers=${sellerCount ?? '—'} india=${indiaAvailable ? sites.join('/') : 'no'}`, 'info', asin);
 
     if (settings.dryRun) {
       log(`${asin}: DRY-RUN would tick Origin ${oLabels.join('+')} & Checklist ${cLabels.join('+')}`, 'info', asin);

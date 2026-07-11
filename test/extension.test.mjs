@@ -190,23 +190,35 @@ test('FUNCTIONAL: chip label maps use dashboard wording (US/India, Expire)', asy
   assert.deepEqual(cfg.checklistLabels({ expiry: true, size: false, multi: false }), ['Expire']);
 });
 
-test('USER: pass-file enrichment ticks Origin US+India and Checklist Expire+Size+Multi', async () => {
+test('USER: enrichment ticks India from a LIVE amazon.in page (no search needed)', async () => {
+  // .in product page is live (detect → product) → India without any marketplace hit.
   const rows = [R('B0AAAA1111', { title: 'Glass Seed Beads White', brand: 'Mill Hill' })];
   const { engine, dash } = await runEngine({
     rows, settings: { mode: 'pass' },
-    env: { sellerCount: 9, availableHosts: ['www.flipkart.com'], productTitle: 'Glass Seed Beads White' },
+    env: { sellerCount: 9, availableHosts: [], detect: () => 'product' },
   });
   await waitDone(engine);
   const a = dash.calls.byAsin.B0AAAA1111;
-  assert.deepEqual(a.origin, ['US', 'India'], 'US always + India (found on Flipkart)');
-  assert.deepEqual(a.checklist, ['Expire', 'Size', 'Multi'], 'Expire always + Size(<700g) + Multi(9>5)');
+  assert.deepEqual(a.origin, ['US', 'India'], 'India from live .in page');
+  assert.deepEqual(a.checklist, ['Expire', 'Size', 'Multi'], 'Expire + Size(<700g) + Multi(9>5)');
 });
 
-test('USER: pass-file enrichment omits India + Multi + Size when rules fail', async () => {
+test('USER: enrichment falls back to marketplace search when .in page is dead', async () => {
+  // .in page not_found → search runs; found on Flipkart → India ticked.
+  const rows = [R('B0AAAA1111', { title: 'Glass Seed Beads White', brand: 'Mill Hill' })];
+  const { engine, dash } = await runEngine({
+    rows, settings: { mode: 'pass' },
+    env: { sellerCount: 9, detect: () => 'not_found', availableHosts: ['www.flipkart.com'], productTitle: 'Glass Seed Beads White' },
+  });
+  await waitDone(engine);
+  assert.deepEqual(dash.calls.byAsin.B0AAAA1111.origin, ['US', 'India'], 'India via Flipkart fallback');
+});
+
+test('USER: enrichment omits India/Multi/Size when .in dead + nowhere else + heavy', async () => {
   const rows = [R('B0GGGG7777', { title: 'Obscure Item XYZ', brand: 'NoBrand' })];
   const { engine, dash } = await runEngine({
     rows, settings: { mode: 'pass' },
-    env: { sellerCount: 3, availableHosts: [],   // not found anywhere; only 3 sellers
+    env: { sellerCount: 3, availableHosts: [], detect: () => 'not_found',
       indiaData: (asin) => ({ asin, bsrPrimary: 12345, bsrPrimaryCategory: 'Beauty', categoryPath: ['Beauty'],
         weightGrams: 900, priceValue: 499, currency: 'INR', canonicalUrl: `https://www.amazon.in/dp/${asin}` }) },
   });

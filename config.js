@@ -190,8 +190,12 @@ export const DEFAULT_SETTINGS = {
   passEnrich: true,
   // Count unique amazon.in sellers (extra offer-listing load) → Multi checkbox.
   countSellers: true,
-  // Search Indian marketplaces to decide the India origin chip.
+  // Search Indian marketplaces to decide the India origin chip. By default this
+  // only runs when the product's OWN amazon.in page is dead (a live .in product
+  // already proves India availability) — a big speedup. Force it to always run
+  // with alwaysSearchMarketplaces.
   checkAvailability: true,
+  alwaysSearchMarketplaces: false,
   availabilitySites: ['amazon_in', 'flipkart', 'nykaa', 'meesho', 'jiomart'],
   availabilityThreshold: 0.45,
 };
