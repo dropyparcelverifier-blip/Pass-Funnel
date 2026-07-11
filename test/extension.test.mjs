@@ -153,6 +153,27 @@ test('FUNCTIONAL: Pass-file Origin + Checklist decision rules', async () => {
   assert.deepEqual(cfg.decideChecklist({ weightGrams: null, sellerCount: null }), { expiry: true, size: false, multi: false });
 });
 
+test('FUNCTIONAL: multi-marketplace query, similarity, availability', async () => {
+  const cfg = await import(configUrl);
+  // query builder dedupes a leading brand
+  assert.equal(cfg.availabilityQuery('Mill Hill', 'Mill Hill Glass Seed Beads'), 'Mill Hill Glass Seed Beads');
+  assert.equal(cfg.availabilityQuery('Nykaa', 'Matte Lipstick Red'), 'Nykaa Matte Lipstick Red');
+  assert.equal(cfg.availabilityQuery('', 'Just A Name'), 'Just A Name');
+  // similarity: same title ~1, unrelated ~0
+  assert.ok(cfg.titleSimilarity('Glass Seed Beads White', 'Glass Seed Beads White') > 0.99);
+  assert.ok(cfg.titleSimilarity('Glass Seed Beads', 'Bluetooth Speaker') < 0.2);
+  // search URLs per marketplace
+  const byKey = Object.fromEntries(cfg.MARKETPLACES.map(m => [m.key, m]));
+  assert.equal(byKey.flipkart.search('a b'), 'https://www.flipkart.com/search?q=a%20b');
+  assert.equal(byKey.amazon_in.search('x'), 'https://www.amazon.in/s?k=x');
+  assert.ok(byKey.nykaa && byKey.meesho && byKey.jiomart, 'all 5 marketplaces present');
+  // availability decision
+  assert.deepEqual(cfg.decideIndiaAvailable([{ key: 'flipkart', sim: 0.6 }, { key: 'nykaa', sim: 0.1 }]), { available: true, sites: ['flipkart'] });
+  assert.deepEqual(cfg.decideIndiaAvailable([{ key: 'meesho', matched: true, sim: 0 }]), { available: true, sites: ['meesho'] });
+  assert.deepEqual(cfg.decideIndiaAvailable([{ key: 'nykaa', sim: 0.2 }]), { available: false, sites: [] });
+  assert.deepEqual(cfg.decideIndiaAvailable([]), { available: false, sites: [] });
+});
+
 test('FUNCTIONAL: category matcher precedence + remark text', async () => {
   const cfg = await import(configUrl);
   assert.equal(cfg.thresholdFor('Beauty & Personal Care', '').key, 'beauty');

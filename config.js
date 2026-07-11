@@ -103,6 +103,46 @@ export function decideChecklist({ weightGrams, sellerCount } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-marketplace India-availability check (for the Origin IN chip).
+// Best-effort: search each enabled marketplace by product name; if a result
+// title is similar enough to the query, the product is deemed sellable in India.
+// Per-site result scraping is fragile — selectors live in content/marketplace.js
+// and need live tuning; the query/URL/scoring logic below is pure + tested.
+// ---------------------------------------------------------------------------
+export const MARKETPLACES = [
+  { key: 'amazon_in', name: 'Amazon.in', host: 'www.amazon.in',  search: q => `https://www.amazon.in/s?k=${encodeURIComponent(q)}` },
+  { key: 'flipkart',  name: 'Flipkart',  host: 'www.flipkart.com', search: q => `https://www.flipkart.com/search?q=${encodeURIComponent(q)}` },
+  { key: 'nykaa',     name: 'Nykaa',     host: 'www.nykaa.com',    search: q => `https://www.nykaa.com/search/result/?q=${encodeURIComponent(q)}` },
+  { key: 'meesho',    name: 'Meesho',    host: 'www.meesho.com',   search: q => `https://www.meesho.com/search?q=${encodeURIComponent(q)}` },
+  { key: 'jiomart',   name: 'JioMart',   host: 'www.jiomart.com',  search: q => `https://www.jiomart.com/search/${encodeURIComponent(q)}` },
+];
+export const AVAILABILITY_SIM_THRESHOLD = 0.45;
+
+// Build a clean search query from brand + product name (dedupes a leading brand).
+export function availabilityQuery(brand, name) {
+  const b = (brand || '').trim(), n = (name || '').trim();
+  const q = (b && n && !n.toLowerCase().includes(b.toLowerCase())) ? `${b} ${n}` : (n || b);
+  return q.replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
+const AVAIL_STOP = new Set(['the','a','an','of','for','with','and','pack','count','ct','set','new','by','in','pcs','pieces','piece','value','size']);
+export function titleWords(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9%.]+/g, ' ').split(' ').filter(w => w && !AVAIL_STOP.has(w));
+}
+// Cosine-ish similarity over word sets (0..1). Shared by adapters + tests.
+export function titleSimilarity(a, b) {
+  const A = new Set(titleWords(a)), B = new Set(titleWords(b));
+  if (!A.size || !B.size) return 0;
+  let inter = 0; A.forEach(w => { if (B.has(w)) inter++; });
+  return inter / Math.sqrt(A.size * B.size);
+}
+// Decide IN availability from per-site results: [{ key, matched?, sim? }].
+export function decideIndiaAvailable(results, threshold = AVAILABILITY_SIM_THRESHOLD) {
+  const hits = (results || []).filter(r => r && (r.matched || (Number.isFinite(r.sim) && r.sim >= threshold)));
+  return { available: hits.length > 0, sites: hits.map(h => h.key) };
+}
+
+// ---------------------------------------------------------------------------
 // Defaults (overridable from the side-panel Settings tab, persisted under K.SETTINGS).
 // ---------------------------------------------------------------------------
 export const DEFAULT_SETTINGS = {
