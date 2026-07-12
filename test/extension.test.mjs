@@ -396,3 +396,51 @@ test('REGRESSION: counters reset cleanly between two Start runs', async () => {
   assert.equal(st.counters.processed, 1, 'not doubled from the previous run');
   assert.equal(st.counters.moved, 1);
 });
+
+// ============================================================== MERGE (Main)
+const mainEngineUrl = () => pathToFileURL(path.join(ROOT, 'modules/engine-main.js')).href + '?t=' + Math.random();
+
+async function makeMainEngine(rows, settings = {}) {
+  const { chrome } = makeEnv({});
+  global.chrome = chrome;
+  await chrome.storage.local.set({ pfvSettings: {
+    mode: 'main', dryRun: true, throttleMinMs: 0, throttleMaxMs: 0, pageTimeoutMs: 1200,
+    showWorkingTab: false, weightMode: 'off', useLlmCategory: false, passEnrich: false,
+    dashboardOrigin: 'http://localhost:3000', ...settings,
+  } });
+  const { createMainEngine } = await import(mainEngineUrl());
+  const dash = makeDashboard(rows, {});
+  const engine = createMainEngine({
+    log: () => {}, sendToDashboard: dash.sendToDashboard,
+    focusDashboard: async () => {}, getWorkingWindowId: async () => null, emit: () => {},
+  });
+  await engine.hydrated;
+  return { engine, dash };
+}
+
+test('MERGE: Main engine constructs with the full public API (drop-in compatible)', async () => {
+  const { engine } = await makeMainEngine([]);
+  for (const m of ['start', 'pause', 'resume', 'stop', 'reset', 'closeTabs', 'wantsResume', 'getStatus', 'getRecords']) {
+    assert.equal(typeof engine[m], 'function', `Main engine exposes ${m}()`);
+  }
+  const st = engine.getStatus();
+  assert.equal(st.running, false);
+  assert.equal(st.paused, false);
+});
+
+test('MERGE: Main engine uses the isolated pfvm* storage namespace', async () => {
+  const { engine } = await makeMainEngine([]);
+  await engine.reset();
+  const store = global.chrome.storage.local;
+  // Pass/Failed keys must NOT be created by the Main engine.
+  const pass = await store.get(['pfvRunState', 'pfvProcessedAsins']);
+  assert.deepEqual(pass, {}, 'Main engine did not touch pfv* (Pass/Failed) keys');
+});
+
+test('MERGE: Main engine runs an empty page to completion without error', async () => {
+  const { engine } = await makeMainEngine([]);
+  await engine.start();
+  const st = await waitDone(engine, 6000);
+  assert.equal(st.running, false, 'run ended');
+  assert.match(st.status, /done/i);
+});
