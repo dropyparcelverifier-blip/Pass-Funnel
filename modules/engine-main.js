@@ -10,7 +10,7 @@
 // every field write but withholds the status-changing clicks (Pass / Link NF /
 // USA Link NF) so the human can audit accuracy before going live.
 
-import { K, getSettings, PAGE } from '../config.js';
+import { K_MAIN as K, getSettings, PAGE } from '../config.js';
 import * as tab from './amazon-tab.js';
 import { analyzePrompt, parseAnalyze, analyzeApi } from './llm.js';
 import { askWeb, isWebMode, closeTab as closeLlmTab, setWindow as setLlmWindow } from './llm-web.js';

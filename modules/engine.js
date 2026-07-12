@@ -208,9 +208,8 @@ export function createEngine(ctx) {
     return { ...decideIndiaAvailable(results, threshold), query, results };
   }
 
-  // ---- per-row dispatcher --------------------------------------------------
+  // ---- per-row dispatcher (Main mode is handled by the separate Main engine) -
   async function processRow(row, settings) {
-    if (settings.mode === 'main') return processRowMain(row, settings);
     if (settings.mode === 'failed') return processRowFailed(row, settings);
     return processRowPass(row, settings);
   }
@@ -497,17 +496,6 @@ export function createEngine(ctx) {
     s.processed.add(rec.asin);
     s.counters.processed = s.processed.size;
     persist(); emit();
-  }
-
-  // ---- MAIN file: full validate & route (Pass/Fail/Link NF/USA Link NF) -----
-  // Foundation is wired (LLM modules, settings, UI, RPC parity). The validate-
-  // and-route pipeline itself is being ported from Dropy Auto-Validator; until
-  // it's live, stop cleanly rather than fake-process rows so Pass/Failed stay
-  // trustworthy.
-  async function processRowMain(row, settings) {
-    s.stopRequested = true;
-    log('Main-file mode: foundation is in place (LLM + settings + UI), but the validate-and-route pipeline is still being ported. Stopping — use Pass or Failed mode for now.', 'warn');
-    emit();
   }
 
   // ---- page reading (grid-wait) --------------------------------------------

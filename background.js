@@ -5,6 +5,7 @@
 
 import { K, LOG_MAX, DEFAULT_SETTINGS, getSettings, saveSettings, normalizeOrigin } from './config.js';
 import { createEngine } from './modules/engine.js';
+import { createMainEngine } from './modules/engine-main.js';
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -88,8 +89,11 @@ async function sendToDashboard(message) {
   }
 }
 
-// ---- engine ----------------------------------------------------------------
-const engine = createEngine({
+// ---- engines ---------------------------------------------------------------
+// Two engines share one ctx: the Pass/Failed engine and the Main-file engine.
+// Only ONE runs at a time, chosen by settings.mode (their run-state lives in
+// separate storage namespaces — K vs K_MAIN — so they never collide).
+const engineCtx = {
   log: (text, kind, asin) => pushLog(text, kind, asin),
   sendToDashboard: (m) => sendToDashboard(m),
   focusDashboard: async () => {
@@ -102,23 +106,27 @@ const engine = createEngine({
     state.running = payload.running; state.paused = payload.paused; state.pausedByCaptcha = payload.pausedByCaptcha;
     broadcast({ action: 'progress', payload });
   },
-});
+};
+const passEngine = createEngine(engineCtx);
+const mainEngine = createMainEngine(engineCtx);
+function activeEngine() { return state.settings.mode === 'main' ? mainEngine : passEngine; }
 
 // ---- auto-resume after crash/restart ---------------------------------------
 let autoResumeDone = false;
 async function autoResumeIfNeeded(trigger) {
   if (autoResumeDone) return; autoResumeDone = true;
   try {
-    await coldStart; await engine.hydrated;
-    if (!engine.wantsResume()) return;
+    await coldStart; await passEngine.hydrated; await mainEngine.hydrated;
+    const eng = activeEngine();
+    if (!eng.wantsResume()) return;
     pushLog(`Auto-resume (${trigger}): a run was interrupted — waiting for the dashboard tab…`, 'info');
     let tab = null;
     for (let i = 0; i < 90; i++) { tab = await getDashboardTab(); if (tab?.id) break; await new Promise(r => setTimeout(r, 1000)); }
     if (!tab?.id) { pushLog('Auto-resume aborted — no dashboard tab reopened. Open it and click Resume.', 'warn'); return; }
     await ensureDashboardRegistration(state.settings.dashboardOrigin);
     await new Promise(r => setTimeout(r, 1500));
-    if (!engine.wantsResume()) return;
-    const res = await engine.resume();
+    if (!eng.wantsResume()) return;
+    const res = await eng.resume();
     pushLog(res?.ok ? 'Auto-resumed the interrupted run.' : `Auto-resume failed: ${res?.error || 'unknown'}.`, res?.ok ? 'ok' : 'warn');
   } catch (e) { pushLog(`Auto-resume error: ${e.message}`, 'warn'); }
 }
@@ -138,8 +146,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const action = msg?.action;
 
   if (action === 'getState') {
-    Promise.all([coldStart, engine.hydrated]).then(() => {
-      const st = engine.getStatus();
+    Promise.all([coldStart, passEngine.hydrated, mainEngine.hydrated]).then(() => {
+      const st = activeEngine().getStatus();
       sendResponse({ ok: true, settings: state.settings, log: state.log, lastScan: state.lastScan,
         running: st.running, paused: st.paused, pausedByCaptcha: st.pausedByCaptcha, status: st.status,
         currentAsin: st.currentAsin, step: st.step, page: st.page, totalPages: st.totalPages,
@@ -172,13 +180,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (action === 'logFromContent') { pushLog(msg.text, msg.kind, msg.asin); sendResponse({ ok: true }); return false; }
 
-  if (action === 'startRun')  { coldStart.then(() => engine.start()).then(sendResponse);  return true; }
-  if (action === 'pauseRun')  { sendResponse(engine.pause()); return false; }
-  if (action === 'resumeRun') { coldStart.then(() => engine.resume()).then(sendResponse); return true; }
-  if (action === 'stopRun')   { engine.stop().then(sendResponse); return true; }
-  if (action === 'closeTabs') { engine.closeTabs().then(sendResponse); return true; }
+  if (action === 'startRun')  { coldStart.then(() => activeEngine().start()).then(sendResponse);  return true; }
+  if (action === 'pauseRun')  { sendResponse(activeEngine().pause()); return false; }
+  if (action === 'resumeRun') { coldStart.then(() => activeEngine().resume()).then(sendResponse); return true; }
+  if (action === 'stopRun')   { activeEngine().stop().then(sendResponse); return true; }
+  if (action === 'closeTabs') { activeEngine().closeTabs().then(sendResponse); return true; }
   if (action === 'resetRun')  {
-    coldStart.then(() => engine.reset()).then(async (res) => {
+    coldStart.then(() => activeEngine().reset()).then(async (res) => {
       if (res?.ok) { state.log = []; await chrome.storage.local.remove([K.LOG]).catch(() => {}); broadcast({ action: 'logCleared' }); }
       sendResponse(res);
     });
@@ -186,16 +194,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (action === 'restartRun') {
     coldStart.then(async () => {
-      const r = await engine.reset();
+      const r = await activeEngine().reset();
       if (r?.ok) { state.log = []; await chrome.storage.local.remove([K.LOG]).catch(() => {}); broadcast({ action: 'logCleared' }); }
-      return engine.start();
+      return activeEngine().start();
     }).then(sendResponse);
     return true;
   }
-  if (action === 'getRecords') { engine.hydrated.then(() => sendResponse({ ok: true, records: engine.getRecords() })); return true; }
+  if (action === 'getRecords') { activeEngine().hydrated.then(() => sendResponse({ ok: true, records: activeEngine().getRecords() })); return true; }
   if (action === 'exportAudit') {
-    engine.hydrated.then(() => {
-      const records = engine.getRecords();
+    activeEngine().hydrated.then(() => {
+      const records = activeEngine().getRecords();
       const fmt = msg.format === 'json' ? 'json' : 'csv';
       const content = fmt === 'json' ? JSON.stringify(records, null, 2) : recordsToCsv(records);
       const dataUrl = 'data:' + (fmt === 'json' ? 'application/json' : 'text/csv') + ';charset=utf-8,' + encodeURIComponent(content);

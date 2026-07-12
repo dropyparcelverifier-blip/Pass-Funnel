@@ -19,6 +19,19 @@ export const K = {
   LAST_SCAN:   'pfvLastScan',
 };
 
+// Isolated run-state for the Main-file engine so it never collides with the
+// Pass/Failed engine's progress. SETTINGS/LOG/LAST_SCAN stay SHARED (one
+// settings object, one log); only the per-run state is namespaced (`pfvm`).
+export const K_MAIN = {
+  SETTINGS:    'pfvSettings',
+  RUN_STATE:   'pfvmRunState',
+  PROCESSED:   'pfvmProcessedAsins',
+  ROW_RECORDS: 'pfvmRowRecords',
+  LOG:         'pfvLog',
+  COUNTERS:    'pfvmCounters',
+  LAST_SCAN:   'pfvLastScan',
+};
+
 export const LOG_MAX = 500;
 
 // ---------------------------------------------------------------------------
