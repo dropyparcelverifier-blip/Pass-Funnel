@@ -50,6 +50,9 @@ function renderState(s) {
   $('cRs').textContent = c.rs ?? 0; $('cDp').textContent = c.dp ?? 0;
   $('cChanged').textContent = c.funnelChanged ?? 0; $('cFlagged').textContent = c.flagged ?? 0;
   $('cMoved').textContent = c.moved ?? 0; $('cCorrected').textContent = c.corrected ?? 0;
+  // Main-mode counters (0 in Pass/Failed).
+  $('cPassed').textContent = c.passed ?? 0; $('cFailed').textContent = c.failed ?? 0;
+  $('cLinkNf').textContent = c.linkNf ?? 0; $('cUsaNf').textContent = c.usaLinkNf ?? 0;
   $('captchaBanner').style.display = s.pausedByCaptcha ? 'block' : 'none';
   renderControls();
 }

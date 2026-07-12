@@ -10,7 +10,7 @@
 // every field write but withholds the status-changing clicks (Pass / Link NF /
 // USA Link NF) so the human can audit accuracy before going live.
 
-import { K_MAIN as K, getSettings, PAGE } from '../config.js';
+import { K_MAIN as K, getSettings, PAGE, mapCategory } from '../config.js';
 import * as tab from './amazon-tab.js';
 import { analyzePrompt, parseAnalyze, analyzeApi } from './llm.js';
 import { askWeb, isWebMode, closeTab as closeLlmTab, setWindow as setLlmWindow } from './llm-web.js';
@@ -255,6 +255,13 @@ export function createMainEngine(ctx) {
     // A curated OVERRIDE (e.g. wig → "Beauty - Other Products") wins outright and
     // skips the category LLM — fastest + exactly what the user wants.
     rec._catOverride = catOptions.length ? categoryOverride(rec.title, rec.amazonCategory, catOptions) : null;
+    // Static department map (config.CATEGORY_MAP): deterministic Amazon-dept →
+    // dashboard-bucket. Skips the LLM for the common cases (health, grocery, pet,
+    // automotive, …). Only used when it targets a REAL dropdown option.
+    if (!rec._catOverride && catOptions.length) {
+      const mapped = mapCategory(`${rec.amazonCategory || ''} ${(rec.amazonCategoryPath && rec.amazonCategoryPath[0]) || ''}`);
+      if (mapped && catOptions.includes(mapped)) { rec._catOverride = mapped; log(`${asin}: category via CATEGORY_MAP → "${mapped}" — skipping LLM`, 'info', asin); }
+    }
     // Force the department catch-all for no-specific-category product types
     // (cleaning consumables…), using the breadcrumb's OWN root department.
     if (!rec._catOverride && catOptions.length && FORCE_DEPT_CATCHALL_RE.test(`${rec.title || ''} ${rec.amazonCategory || ''}`)) {
