@@ -9,6 +9,29 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   b.classList.add('active'); $('tab-' + b.dataset.tab).classList.add('active');
 }));
 
+// ---- mode (segmented control) ----
+const MODES = ['main', 'pass', 'failed'];
+const MODE_LABEL = { main: 'Main file', pass: 'Pass file', failed: 'Failed file' };
+let currentMode = 'pass';
+function applyCounterVisibility(mode) {
+  document.querySelectorAll('.chip[data-modes]').forEach(ch => { ch.hidden = !ch.dataset.modes.split(' ').includes(mode); });
+}
+function setModeUI(m) {
+  currentMode = MODES.includes(m) ? m : 'pass';
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+  const bm = $('brandMode'); if (bm) bm.textContent = MODE_LABEL[currentMode];
+  applyCounterVisibility(currentMode);
+  updateModeHint();
+}
+document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', async () => {
+  setModeUI(b.dataset.mode);
+  await send({ action: 'saveSettings', settings: { mode: currentMode } });
+}));
+function updateDryTag() {
+  const dry = $('dryRun').checked, t = $('dryTag');
+  t.textContent = dry ? 'DRY' : 'LIVE'; t.className = 'state-tag ' + (dry ? 'dry' : 'live');
+}
+
 // ---- log rendering ----
 function lineEl(l) {
   const d = document.createElement('div');
@@ -19,10 +42,16 @@ function lineEl(l) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
 function appendLog(l) {
-  for (const id of ['log', 'liveLog']) { const box = $(id); if (!box) continue; box.appendChild(lineEl(l)); box.scrollTop = box.scrollHeight;
+  for (const id of ['log', 'liveLog']) { const box = $(id); if (!box) continue;
+    const empty = box.querySelector('.log-empty'); if (empty) empty.remove();
+    box.appendChild(lineEl(l)); box.scrollTop = box.scrollHeight;
     while (box.childNodes.length > 400) box.removeChild(box.firstChild); }
 }
-function renderLog(lines) { for (const id of ['log', 'liveLog']) { const box = $(id); if (box) box.innerHTML = ''; } (lines || []).forEach(appendLog); }
+function renderLog(lines) {
+  for (const id of ['log', 'liveLog']) { const box = $(id); if (box) box.innerHTML = ''; }
+  if (!(lines && lines.length)) { const box = $('liveLog'); if (box) box.innerHTML = '<div class="log-empty">No activity yet — pick a mode and Start.</div>'; }
+  (lines || []).forEach(appendLog);
+}
 
 // ---- state rendering ----
 let uiState = { running: false, paused: false, pausedByCaptcha: false };
@@ -39,12 +68,13 @@ function renderState(s) {
   if (!s) return;
   uiState = { running: !!s.running, paused: !!s.paused, pausedByCaptcha: !!s.pausedByCaptcha };
   const pill = $('statePill');
-  pill.textContent = s.status || 'Idle';
   pill.className = 'pill' + (s.pausedByCaptcha ? ' captcha' : s.running ? ' run' : (s.paused ? ' paused' : ''));
+  $('pillTxt').textContent = (s.status || 'Idle').replace(/\s*—.*$/, '');   // short label in the pill
   $('curStatus').textContent = s.status || 'Idle';
   $('curAsin').textContent = s.currentAsin || '—';
   $('curStep').textContent = s.step || '—';
   $('curPage').textContent = (s.page != null) ? `${s.page}${s.totalPages ? ' / ' + s.totalPages : ''}` : '—';
+  $('progFill').style.width = (s.page && s.totalPages) ? Math.min(100, Math.round(100 * s.page / s.totalPages)) + '%' : '0%';
   const c = s.counters || {};
   $('cProcessed').textContent = c.processed ?? s.processedCount ?? 0;
   $('cRs').textContent = c.rs ?? 0; $('cDp').textContent = c.dp ?? 0;
@@ -53,7 +83,7 @@ function renderState(s) {
   // Main-mode counters (0 in Pass/Failed).
   $('cPassed').textContent = c.passed ?? 0; $('cFailed').textContent = c.failed ?? 0;
   $('cLinkNf').textContent = c.linkNf ?? 0; $('cUsaNf').textContent = c.usaLinkNf ?? 0;
-  $('captchaBanner').style.display = s.pausedByCaptcha ? 'block' : 'none';
+  $('captchaBanner').style.display = s.pausedByCaptcha ? '' : 'none';
   renderControls();
 }
 
@@ -79,15 +109,13 @@ $('btnReset').addEventListener('click', async () => {
   appendLog({ ts: Date.now(), text: r?.ok ? 'progress + log reset' : 'reset failed', kind: r?.ok ? 'ok' : 'err' });
   renderState(await send({ action: 'getState' })); b.disabled = false; b.textContent = o;
 });
-$('dryRun').addEventListener('change', async () => { await send({ action: 'saveSettings', settings: { dryRun: $('dryRun').checked } }); });
+$('dryRun').addEventListener('change', async () => { updateDryTag(); await send({ action: 'saveSettings', settings: { dryRun: $('dryRun').checked } }); });
 function updateModeHint() {
-  const m = $('setMode').value;
   $('modeHint').textContent =
-    m === 'main' ? 'Open the MAIN file view, then Start. Full validate each row and route it: Pass / Move Fail / Link NF / USA Link NF (uses the LLM for weight/category fallback).'
-    : m === 'failed' ? 'Open the FAILED file view, then Start. Scrapes amazon.in + amazon.com, fills/fixes every field, moves rows that now pass.'
-    : 'Open the PASS file view, then Start. Corrects the funnel (if wrong), writes the Remark, and ticks Origin/Checklist.';
+    currentMode === 'main' ? 'Open the MAIN file view, then Start. Validates each row and routes it: Pass / Move Fail / Link NF / USA Link NF (LLM fallback for weight/category).'
+    : currentMode === 'failed' ? 'Open the FAILED file view, then Start. Scrapes amazon.in + amazon.com, fills/fixes every field, moves rows that now pass.'
+    : 'Open the PASS file view, then Start. Corrects the funnel (if wrong), writes the Remark, ticks Origin/Checklist.';
 }
-$('setMode').addEventListener('change', async () => { await send({ action: 'saveSettings', settings: { mode: $('setMode').value } }); updateModeHint(); });
 
 // ---- export ----
 async function exportAudit(format) {
@@ -107,8 +135,8 @@ function fillSettings(st) {
   $('setThrottleMin').value = st.throttleMinMs ?? 2000;
   $('setThrottleMax').value = st.throttleMaxMs ?? 5000;
   $('setWriteRemark').checked = st.writeRemark !== false;
-  $('dryRun').checked = !!st.dryRun;
-  $('setMode').value = ['main', 'failed', 'pass'].includes(st.mode) ? st.mode : 'pass';
+  $('dryRun').checked = !!st.dryRun; updateDryTag();
+  setModeUI(st.mode);
   $('setUsZip').value = st.usZip || '10001';
   $('setSourceHost').value = st.sourceLinkHost === 'in' ? 'in' : 'com';
   $('setPassEnrich').checked = st.passEnrich !== false;
@@ -126,7 +154,7 @@ $('btnSaveSettings').addEventListener('click', async () => {
     throttleMinMs: parseInt($('setThrottleMin').value, 10) || 2000,
     throttleMaxMs: parseInt($('setThrottleMax').value, 10) || 5000,
     writeRemark: $('setWriteRemark').checked,
-    mode: $('setMode').value,
+    mode: currentMode,
     usZip: $('setUsZip').value.trim() || '10001',
     sourceLinkHost: $('setSourceHost').value === 'in' ? 'in' : 'com',
     passEnrich: $('setPassEnrich').checked,

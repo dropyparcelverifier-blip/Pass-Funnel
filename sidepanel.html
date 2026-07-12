@@ -3,87 +3,200 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dropy Pass-Funnel Validator</title>
+  <title>Dropy Validator</title>
   <style>
-    :root { --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --panel3:#273252; --line2:#2b3652;
-      --txt:#e6ecff; --muted:#9fb0d6; --grad:linear-gradient(135deg,#5b8cff,#7a5bff); }
+    :root {
+      --bg:#0b0f1a; --surface:#141b2b; --surface-2:#1b2438; --surface-3:#232f49;
+      --line:#28324c; --line-soft:#1f293f;
+      --txt:#eaf0ff; --muted:#98a6cc; --faint:#6b7aa0;
+      --accent:#5b8cff; --accent-2:#7a5bff; --grad:linear-gradient(135deg,#5b8cff,#7a5bff);
+      --ok:#5fe0a0; --warn:#fbbf5a; --err:#ff7a85; --rs:#7fb0ff; --dp:#b9a3ff; --info:#6ad0ff;
+      --r:12px; --r-sm:9px; --r-xs:7px; --pill:999px;
+      --shadow:0 6px 20px -8px rgba(0,0,0,.55);
+      --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+      --sans:system-ui,"Segoe UI",Inter,Roboto,sans-serif;
+    }
     * { box-sizing:border-box; }
-    body { margin:0; font:13px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
-    header { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line2); }
-    header b { font-size:14px; }
-    .pill { margin-left:auto; font-size:11px; padding:3px 9px; border-radius:999px; background:var(--panel3); color:var(--muted); }
-    .pill.run { background:rgba(91,140,255,.25); color:#bcd0ff; }
-    .pill.paused { background:rgba(250,204,21,.2); color:#fde68a; }
-    .pill.captcha { background:rgba(248,113,113,.2); color:#fecaca; }
-    nav { display:flex; border-bottom:1px solid var(--line2); }
-    nav button { flex:1; background:none; border:none; color:var(--muted); padding:9px; cursor:pointer; font-size:12px; }
-    nav button.active { color:var(--txt); box-shadow:inset 0 -2px 0 #5b8cff; }
+    ::selection { background:rgba(91,140,255,.35); }
+    body { margin:0; font:13px/1.5 var(--sans); background:
+      radial-gradient(120% 60% at 100% 0%, rgba(122,91,255,.10), transparent 60%),
+      radial-gradient(120% 60% at 0% 0%, rgba(91,140,255,.10), transparent 55%), var(--bg);
+      color:var(--txt); -webkit-font-smoothing:antialiased; }
+    ::-webkit-scrollbar { width:9px; height:9px; }
+    ::-webkit-scrollbar-thumb { background:var(--surface-3); border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background:#2f3d5e; background-clip:padding-box; }
+    button, input, select { font-family:inherit; }
+    :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+
+    /* ---- header ---- */
+    header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:9px;
+      padding:11px 13px; background:rgba(11,15,26,.82); backdrop-filter:blur(10px);
+      border-bottom:1px solid var(--line-soft); }
+    .logo { width:22px; height:22px; border-radius:7px; background:var(--grad); flex:none;
+      box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 3px 10px -2px rgba(91,140,255,.6); }
+    .brand { font-weight:650; font-size:13.5px; letter-spacing:.2px; }
+    .brand small { display:block; font-weight:500; font-size:10px; color:var(--faint); letter-spacing:.3px; }
+    .pill { margin-left:auto; display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
+      padding:4px 10px; border-radius:var(--pill); background:var(--surface-3); color:var(--muted);
+      border:1px solid var(--line); }
+    .pill .dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+    .pill.run { background:rgba(95,224,160,.14); color:#8ff0c3; border-color:rgba(95,224,160,.3); }
+    .pill.run .dot { animation:pulse 1.3s ease-in-out infinite; }
+    .pill.paused { background:rgba(251,191,90,.15); color:#ffd68a; border-color:rgba(251,191,90,.3); }
+    .pill.captcha { background:rgba(255,122,133,.16); color:#ffb3ba; border-color:rgba(255,122,133,.35); }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
+
+    /* ---- tabs ---- */
+    nav { display:flex; gap:2px; padding:8px 10px 0; }
+    nav button { flex:1; background:none; border:none; color:var(--faint); padding:8px 6px 10px; cursor:pointer;
+      font-size:12px; font-weight:600; border-radius:8px 8px 0 0; position:relative; transition:color .15s; }
+    nav button:hover { color:var(--muted); }
+    nav button.active { color:var(--txt); }
+    nav button.active::after { content:""; position:absolute; left:14px; right:14px; bottom:0; height:2px;
+      border-radius:2px; background:var(--grad); }
+    .nav-wrap { border-bottom:1px solid var(--line-soft); }
     main { padding:12px; }
-    section.tab { display:none; } section.tab.active { display:block; }
-    .btnrow { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
-    button.act { background:var(--panel2); color:var(--txt); border:1px solid var(--line2); border-radius:8px;
-      padding:8px 12px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; }
-    button.act:hover { background:var(--panel3); }
-    button.act.primary { background:var(--grad); border:none; color:#fff; flex:1; justify-content:center; }
-    button.act.danger:hover { background:rgba(248,113,113,.15); border-color:rgba(248,113,113,.4); }
-    button.act.mini { font-size:11px; padding:6px 9px; }
-    button.act:disabled { opacity:.4; cursor:not-allowed; }
-    .card { background:var(--panel); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
-    .card h3 { margin:0 0 8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-    .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; }
-    .kv .k { color:var(--muted); } .kv .v { text-align:right; } .mono { font-family:ui-monospace,Menlo,monospace; }
-    .chips { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-    .chip { display:flex; justify-content:space-between; background:var(--panel2); border-radius:8px; padding:6px 9px; }
-    .chip .num { font-weight:700; } .num.ok{color:#86efac} .num.warn{color:#fde68a} .num.rs{color:#93c5fd} .num.dp{color:#c4b5fd}
-    label.toggle { display:flex; align-items:center; gap:7px; margin:8px 0; color:var(--muted); }
-    .field { margin-bottom:9px; } .field label { display:block; color:var(--muted); margin-bottom:3px; font-size:12px; }
-    .field input, .field select { width:100%; background:var(--panel2); border:1px solid var(--line2); color:var(--txt); border-radius:7px; padding:7px; }
-    .hint { color:var(--muted); font-size:11px; }
-    table.th { width:100%; border-collapse:collapse; font-size:12px; } table.th td { padding:2px 4px; } table.th td:last-child{text-align:right;color:var(--muted)}
-    #liveLog, #log { font-family:ui-monospace,Menlo,monospace; font-size:11px; max-height:280px; overflow:auto; }
-    .line { padding:2px 0; border-bottom:1px solid rgba(255,255,255,.04); }
-    .line.warn{color:#fde68a} .line.err{color:#fca5a5} .line.ok{color:#86efac} .line .ts{color:var(--muted)}
-    .banner { border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08); }
+    section.tab { display:none; animation:fade .18s ease; } section.tab.active { display:block; }
+    @keyframes fade { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:none} }
+
+    /* ---- segmented mode control ---- */
+    .seg { display:flex; gap:3px; padding:3px; background:var(--surface-2); border:1px solid var(--line);
+      border-radius:var(--r-sm); margin-bottom:6px; }
+    .seg button { flex:1; background:none; border:none; color:var(--muted); font-size:12px; font-weight:600;
+      padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s; }
+    .seg button:hover { color:var(--txt); }
+    .seg button.active { color:#fff; background:var(--grad); box-shadow:0 2px 8px -2px rgba(91,140,255,.6); }
+
+    /* ---- buttons ---- */
+    .btnrow { display:flex; gap:7px; margin-bottom:9px; flex-wrap:wrap; }
+    button.act { background:var(--surface-2); color:var(--txt); border:1px solid var(--line); border-radius:var(--r-sm);
+      padding:9px 12px; cursor:pointer; font-size:12px; font-weight:600; display:inline-flex; align-items:center;
+      justify-content:center; gap:6px; transition:.14s; }
+    button.act:hover { background:var(--surface-3); border-color:#33415f; transform:translateY(-1px); }
+    button.act:active { transform:translateY(0); }
+    button.act.primary { background:var(--grad); border:none; color:#fff; flex:1;
+      box-shadow:0 4px 14px -4px rgba(91,140,255,.65); }
+    button.act.primary:hover { filter:brightness(1.07); }
+    button.act.danger:hover { background:rgba(255,122,133,.14); border-color:rgba(255,122,133,.4); color:#ffb3ba; }
+    button.act.mini { font-size:11px; padding:7px 9px; font-weight:600; }
+    button.act:disabled { opacity:.38; cursor:not-allowed; transform:none; filter:none; }
+
+    /* ---- cards ---- */
+    .card { background:linear-gradient(180deg, var(--surface), #121826); border:1px solid var(--line);
+      border-radius:var(--r); padding:12px; margin-bottom:11px; box-shadow:var(--shadow); }
+    .card h3 { margin:0 0 10px; font-size:10.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.09em; font-weight:700; }
+
+    /* ---- current / kv ---- */
+    .kv { display:grid; grid-template-columns:auto 1fr; gap:7px 12px; align-items:baseline; }
+    .kv .k { color:var(--faint); font-size:11.5px; }
+    .kv .v { text-align:right; font-weight:600; }
+    .mono { font-family:var(--mono); font-size:12px; letter-spacing:.2px; }
+    .prog { height:5px; background:var(--surface-2); border-radius:999px; overflow:hidden; margin-top:10px; }
+    .prog-fill { height:100%; width:0; background:var(--grad); border-radius:999px; transition:width .3s ease; }
+
+    /* ---- counters ---- */
+    .chips { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .chip { display:flex; flex-direction:column; gap:2px; background:var(--surface-2); border:1px solid var(--line-soft);
+      border-radius:var(--r-sm); padding:8px 10px; }
+    .chip .lbl { font-size:10.5px; color:var(--faint); font-weight:600; }
+    .chip .num { font-size:18px; font-weight:750; font-variant-numeric:tabular-nums; line-height:1.1; }
+    .num.ok{color:var(--ok)} .num.warn{color:var(--warn)} .num.rs{color:var(--rs)} .num.dp{color:var(--dp)} .num.err{color:var(--err)}
+    .chip[hidden]{ display:none; }
+
+    /* ---- switch (dry-run) ---- */
+    .switchrow { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:11px;
+      background:var(--surface); border:1px solid var(--line); border-radius:var(--r); }
+    .switchrow .sw-txt { flex:1; }
+    .switchrow .sw-txt b { display:block; font-size:12px; }
+    .switchrow .sw-txt small { color:var(--faint); font-size:10.5px; }
+    .switch { position:relative; width:44px; height:24px; flex:none; }
+    .switch input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+    .switch .track { position:absolute; inset:0; border-radius:999px; background:rgba(95,224,160,.3); transition:.18s; }
+    .switch .thumb { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
+      background:#fff; transition:.18s; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+    .switch input:checked + .track { background:rgba(251,191,90,.4); }
+    .switch input:checked + .track + .thumb { transform:translateX(20px); }
+    .state-tag { font-size:10px; font-weight:800; letter-spacing:.06em; padding:3px 7px; border-radius:var(--pill); }
+    .state-tag.live { background:rgba(95,224,160,.16); color:#8ff0c3; }
+    .state-tag.dry { background:rgba(251,191,90,.16); color:#ffd68a; }
+
+    /* ---- toggles / fields ---- */
+    label.toggle { display:flex; align-items:center; gap:9px; margin:9px 0; color:var(--muted); font-size:12px; cursor:pointer; }
+    label.toggle input { accent-color:var(--accent); width:15px; height:15px; }
+    .field { margin-bottom:10px; } .field label { display:block; color:var(--faint); margin-bottom:4px; font-size:11px; font-weight:600; }
+    .field input, .field select { width:100%; background:var(--surface-2); border:1px solid var(--line); color:var(--txt);
+      border-radius:var(--r-xs); padding:9px 10px; font-size:12.5px; transition:.14s; }
+    .field input:hover, .field select:hover { border-color:#33415f; }
+    .field input:focus, .field select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(91,140,255,.18); }
+    .hint { color:var(--faint); font-size:11px; line-height:1.5; margin:6px 0 0; }
+    .hint b { color:var(--muted); }
+
+    table.th { width:100%; border-collapse:collapse; font-size:12px; }
+    table.th td { padding:4px 4px; border-bottom:1px solid var(--line-soft); }
+    table.th tr:last-child td { border-bottom:none; }
+    table.th td:last-child { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; font-weight:600; }
+
+    /* ---- log ---- */
+    #liveLog, #log { font-family:var(--mono); font-size:11px; max-height:300px; overflow:auto; margin:-2px; padding:2px; }
+    .line { padding:3px 8px; border-left:2px solid transparent; border-radius:0 5px 5px 0; margin-bottom:1px; color:var(--muted); }
+    .line .ts { color:var(--faint); margin-right:6px; }
+    .line.info { border-left-color:var(--line); }
+    .line.ok { border-left-color:var(--ok); color:#c9f5df; background:rgba(95,224,160,.05); }
+    .line.warn { border-left-color:var(--warn); color:#ffe6b8; background:rgba(251,191,90,.05); }
+    .line.err { border-left-color:var(--err); color:#ffc9ce; background:rgba(255,122,133,.06); }
+    .log-empty { color:var(--faint); font-style:italic; padding:6px 8px; }
+
+    /* ---- captcha banner ---- */
+    .banner { border-color:rgba(255,122,133,.4); background:linear-gradient(180deg, rgba(255,122,133,.12), rgba(255,122,133,.05));
+      display:flex; align-items:center; gap:10px; }
+    .banner .ico { font-size:18px; animation:pulse 1.6s ease-in-out infinite; }
   </style>
 </head>
 <body>
   <header>
-    <b>Pass-Funnel Validator</b>
-    <span class="pill" id="statePill">Idle</span>
+    <div class="logo"></div>
+    <div class="brand">Dropy Validator<small id="brandMode">Main · Pass · Failed</small></div>
+    <span class="pill" id="statePill"><span class="dot"></span><span id="pillTxt">Idle</span></span>
   </header>
-  <nav>
-    <button data-tab="run" class="active">Run</button>
-    <button data-tab="settings">Settings</button>
-    <button data-tab="scan">Scan</button>
-  </nav>
+  <div class="nav-wrap">
+    <nav>
+      <button data-tab="run" class="active">Run</button>
+      <button data-tab="settings">Settings</button>
+      <button data-tab="scan">Scan</button>
+    </nav>
+  </div>
   <main>
     <!-- RUN -->
     <section class="tab active" id="tab-run">
+      <div class="seg" id="modeSeg">
+        <button data-mode="main">Main</button>
+        <button data-mode="pass">Pass</button>
+        <button data-mode="failed">Failed</button>
+      </div>
+      <p class="hint" id="modeHint" style="margin:0 0 11px">Open the matching file view on the dashboard, then Start.</p>
+
+      <div class="switchrow">
+        <label class="switch"><input type="checkbox" id="dryRun" /><span class="track"></span><span class="thumb"></span></label>
+        <div class="sw-txt"><b>Dry-run</b><small>Compute everything, write nothing</small></div>
+        <span class="state-tag live" id="dryTag">LIVE</span>
+      </div>
+
       <div class="btnrow">
         <button class="act primary" id="btnStart" title="Begin — auto-resumes an interrupted run, or a fresh pass from the top">▶ Start</button>
         <button class="act" id="btnPause">⏸ Pause</button>
         <button class="act danger" id="btnStop">⏹ Stop</button>
-        <button class="act" id="btnRestart" title="Start over — stop, clear progress + log, run fresh">⟳ Restart</button>
       </div>
       <div class="btnrow">
+        <button class="act mini" id="btnRestart" title="Stop, clear progress + log, run fresh">⟳ Restart</button>
         <button class="act mini" id="btnExportCsv">⬇ CSV</button>
         <button class="act mini" id="btnExportJson">⬇ JSON</button>
-        <button class="act mini" id="btnCloseTabs">✕ Close tab</button>
+        <button class="act mini" id="btnCloseTabs">✕ Tab</button>
         <button class="act mini danger" id="btnReset">↺ Reset</button>
       </div>
-      <div class="field">
-        <label>File / mode</label>
-        <select id="setMode">
-          <option value="main">Main file — full validate &amp; route (Pass / Fail / Link NF / USA Link NF)</option>
-          <option value="pass">Pass file — funnel (if wrong) + remark + Origin/Checklist</option>
-          <option value="failed">Failed file — full validation: fill/fix every field, move if it passes</option>
-        </select>
-        <p class="hint" id="modeHint">Open the matching file view on the dashboard, then Start.</p>
-      </div>
-      <label class="toggle"><input type="checkbox" id="dryRun" /> Dry-run — compute everything but never write to the dashboard</label>
 
       <div class="card banner" id="captchaBanner" style="display:none;">
-        <b>⚠ CAPTCHA</b> — solve it in the amazon.in tab; the run <b>auto-resumes</b> when cleared.
+        <span class="ico">⚠</span>
+        <div><b>CAPTCHA</b> — solve it in the amazon.in tab; the run <b>auto-resumes</b> when cleared.</div>
       </div>
 
       <div class="card">
@@ -94,22 +207,23 @@
           <div class="k">Step</div><div class="v" id="curStep">—</div>
           <div class="k">Page</div><div class="v" id="curPage">—</div>
         </div>
+        <div class="prog"><div class="prog-fill" id="progFill"></div></div>
       </div>
 
       <div class="card">
         <h3>Counters</h3>
         <div class="chips">
-          <div class="chip"><span>Processed</span><span class="num" id="cProcessed">0</span></div>
-          <div class="chip"><span>RS</span><span class="num rs" id="cRs">0</span></div>
-          <div class="chip"><span>DP</span><span class="num dp" id="cDp">0</span></div>
-          <div class="chip"><span>Funnel changed</span><span class="num ok" id="cChanged">0</span></div>
-          <div class="chip"><span>Flagged</span><span class="num warn" id="cFlagged">0</span></div>
-          <div class="chip"><span>Moved→Pass</span><span class="num ok" id="cMoved">0</span></div>
-          <div class="chip"><span>Corrected</span><span class="num rs" id="cCorrected">0</span></div>
-          <div class="chip"><span>Passed</span><span class="num ok" id="cPassed">0</span></div>
-          <div class="chip"><span>Failed</span><span class="num warn" id="cFailed">0</span></div>
-          <div class="chip"><span>Link NF</span><span class="num dp" id="cLinkNf">0</span></div>
-          <div class="chip"><span>USA Link NF</span><span class="num dp" id="cUsaNf">0</span></div>
+          <div class="chip" data-modes="main pass failed"><span class="lbl">Processed</span><span class="num" id="cProcessed">0</span></div>
+          <div class="chip" data-modes="main pass failed"><span class="lbl">Flagged</span><span class="num warn" id="cFlagged">0</span></div>
+          <div class="chip" data-modes="pass failed"><span class="lbl">RS</span><span class="num rs" id="cRs">0</span></div>
+          <div class="chip" data-modes="pass failed"><span class="lbl">DP</span><span class="num dp" id="cDp">0</span></div>
+          <div class="chip" data-modes="pass failed"><span class="lbl">Funnel fixed</span><span class="num ok" id="cChanged">0</span></div>
+          <div class="chip" data-modes="failed"><span class="lbl">Corrected</span><span class="num rs" id="cCorrected">0</span></div>
+          <div class="chip" data-modes="failed"><span class="lbl">Moved → Pass</span><span class="num ok" id="cMoved">0</span></div>
+          <div class="chip" data-modes="main"><span class="lbl">Passed</span><span class="num ok" id="cPassed">0</span></div>
+          <div class="chip" data-modes="main"><span class="lbl">Failed</span><span class="num err" id="cFailed">0</span></div>
+          <div class="chip" data-modes="main"><span class="lbl">Link NF</span><span class="num dp" id="cLinkNf">0</span></div>
+          <div class="chip" data-modes="main"><span class="lbl">USA Link NF</span><span class="num dp" id="cUsaNf">0</span></div>
         </div>
       </div>
 
@@ -127,8 +241,9 @@
         <div class="field" style="flex:1"><label>Throttle max (ms)</label><input id="setThrottleMax" type="number" /></div>
       </div>
       <label class="toggle"><input type="checkbox" id="setWriteRemark" /> Write the BSR rank into Remark</label>
+
       <div class="card">
-        <h3>Failed-file mode only</h3>
+        <h3>Failed-file mode</h3>
         <div class="btnrow">
           <div class="field" style="flex:1"><label>US ZIP (for USD price)</label><input id="setUsZip" placeholder="10001" /></div>
           <div class="field" style="flex:1"><label>Source Link uses</label>
@@ -138,17 +253,19 @@
             </select>
           </div>
         </div>
-        <p class="hint">Failed mode scrapes amazon.com (with this ZIP) for USD, fills every field, then peeks the verdict and clicks Move Pass only if the row now passes.</p>
+        <p class="hint">Scrapes amazon.com (with this ZIP) for USD, fills every field, then Move Pass only if the row now passes.</p>
       </div>
+
       <div class="card">
-        <h3>Pass-file enrichment (Origin + Checklist)</h3>
-        <label class="toggle"><input type="checkbox" id="setPassEnrich" /> Tick Origin (US + India) &amp; Checklist (Expire/Size/Multi)</label>
-        <label class="toggle"><input type="checkbox" id="setCountSellers" /> Count amazon.in sellers → Multi (extra page load per row)</label>
-        <label class="toggle"><input type="checkbox" id="setCheckAvail" /> Search Flipkart/Nykaa/Meesho/JioMart/Amazon.in → India origin</label>
-        <p class="hint">Only runs in <b>Pass</b> mode. The availability search adds up to 5 page loads per row — slow but that's the India check. Selectors are best-effort; dry-run first and send me any "tick failed" cell dumps to lock them.</p>
+        <h3>Origin + Checklist enrichment</h3>
+        <label class="toggle"><input type="checkbox" id="setPassEnrich" /> Tick Origin (US + India) &amp; Checklist (Brand/Expire/Size/Multi)</label>
+        <label class="toggle"><input type="checkbox" id="setCountSellers" /> Count amazon.in sellers → Brand/Multi</label>
+        <label class="toggle"><input type="checkbox" id="setCheckAvail" /> Search Flipkart/Nykaa/Meesho/JioMart → India origin</label>
+        <p class="hint">Runs in <b>Pass</b> &amp; <b>Main</b> modes. The marketplace search adds page loads per row — dry-run first and send me any "tick failed" cell dumps to lock selectors.</p>
       </div>
+
       <div class="card">
-        <h3>Main-file mode — weight/category LLM</h3>
+        <h3>Main mode — weight/category LLM</h3>
         <div class="field"><label>Weight/category fallback source</label>
           <select id="setWeightMode">
             <option value="gemini-web">Gemini (web UI — sign in to gemini.google.com)</option>
@@ -163,11 +280,12 @@
           </div>
           <div class="field" style="flex:1"><label>API model (blank = default)</label><input id="setLlmModel" placeholder="default" /></div>
         </div>
-        <div class="field"><label>API key (only for API mode)</label><input id="setLlmApiKey" type="password" placeholder="AIza… / sk-…" /></div>
-        <p class="hint">Used in <b>Main</b> mode only, as a FALLBACK — when Amazon's weight is missing/impossible, or category when the breadcrumb + CATEGORY_MAP don't resolve. Web modes drive your logged-in chat tab (no key).</p>
+        <div class="field"><label>API key (API mode only)</label><input id="setLlmApiKey" type="password" placeholder="AIza… / sk-…" /></div>
+        <p class="hint">A FALLBACK only — Amazon weight/category is used first (breadcrumb + CATEGORY_MAP). Web modes drive your logged-in chat tab; no key needed.</p>
       </div>
+
       <div class="card">
-        <h3>Category thresholds (DP if BSR missing or ≥)</h3>
+        <h3>Category thresholds — DP if BSR missing or ≥</h3>
         <table class="th">
           <tr><td>Beauty</td><td>60,000</td></tr>
           <tr><td>Sports / Outdoors</td><td>30,000</td></tr>
@@ -176,9 +294,9 @@
           <tr><td>Musical Instruments</td><td>30,000</td></tr>
           <tr><td>Everything else</td><td>50,000</td></tr>
         </table>
-        <p class="hint">Thresholds live in <b>config.js</b> (edit there to change). Category comes from the product's primary Amazon BSR category.</p>
+        <p class="hint">Edit in <b>config.js</b>. Category comes from the product's primary Amazon BSR category.</p>
       </div>
-      <button class="act primary" id="btnSaveSettings">Save settings</button>
+      <button class="act primary" id="btnSaveSettings" style="width:100%">Save settings</button>
     </section>
 
     <!-- SCAN -->
@@ -187,7 +305,7 @@
         <button class="act primary" id="btnScan">Scan dashboard</button>
         <button class="act mini" id="btnCopyScan">Copy JSON</button>
       </div>
-      <p class="hint">Open the <b>Pass</b> or <b>Failed</b> file view, then Scan — confirms the grid + columns so the writes land correctly.</p>
+      <p class="hint">Open the file view you want to work on, then Scan — it confirms the grid + columns so writes land correctly.</p>
       <div class="card"><div id="log"></div></div>
     </section>
   </main>
