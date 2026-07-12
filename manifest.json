@@ -47,6 +47,15 @@
       ],
       "js": ["content/marketplace.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["content/llm-web.js"],
+      "run_at": "document_idle"
     }
   ],
   "minimum_chrome_version": "114"

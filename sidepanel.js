@@ -78,10 +78,11 @@ $('btnReset').addEventListener('click', async () => {
 });
 $('dryRun').addEventListener('change', async () => { await send({ action: 'saveSettings', settings: { dryRun: $('dryRun').checked } }); });
 function updateModeHint() {
-  const failed = $('setMode').value === 'failed';
-  $('modeHint').textContent = failed
-    ? 'Open the FAILED file view, then Start. Scrapes amazon.in + amazon.com, fills/fixes every field, moves rows that now pass.'
-    : 'Open the PASS file view, then Start. Only corrects the funnel (if wrong) and writes the Remark.';
+  const m = $('setMode').value;
+  $('modeHint').textContent =
+    m === 'main' ? 'Open the MAIN file view, then Start. Full validate each row and route it: Pass / Move Fail / Link NF / USA Link NF (uses the LLM for weight/category fallback).'
+    : m === 'failed' ? 'Open the FAILED file view, then Start. Scrapes amazon.in + amazon.com, fills/fixes every field, moves rows that now pass.'
+    : 'Open the PASS file view, then Start. Corrects the funnel (if wrong), writes the Remark, and ticks Origin/Checklist.';
 }
 $('setMode').addEventListener('change', async () => { await send({ action: 'saveSettings', settings: { mode: $('setMode').value } }); updateModeHint(); });
 
@@ -104,7 +105,7 @@ function fillSettings(st) {
   $('setThrottleMax').value = st.throttleMaxMs ?? 5000;
   $('setWriteRemark').checked = st.writeRemark !== false;
   $('dryRun').checked = !!st.dryRun;
-  $('setMode').value = st.mode === 'failed' ? 'failed' : 'pass';
+  $('setMode').value = ['main', 'failed', 'pass'].includes(st.mode) ? st.mode : 'pass';
   $('setUsZip').value = st.usZip || '10001';
   $('setSourceHost').value = st.sourceLinkHost === 'in' ? 'in' : 'com';
   $('setPassEnrich').checked = st.passEnrich !== false;

@@ -218,10 +218,11 @@ export function decideIndiaAvailable(results, threshold = AVAILABILITY_SIM_THRES
 // ---------------------------------------------------------------------------
 export const DEFAULT_SETTINGS = {
   // Which file we're processing:
-  //   'pass'   → re-check FUNNEL (only if wrong) + write Remark. Nothing else. (default)
+  //   'main'   → FULL validate a Main-file row and route it: Pass / Move Fail /
+  //              Link NF / USA Link NF (the original Dropy Auto-Validator flow).
+  //   'pass'   → re-check FUNNEL (only if wrong) + write Remark + Origin/Checklist. (default)
   //   'failed' → FULL validation: scrape amazon.in (+ amazon.com for USD), fill/correct
-  //              EVERY field (weight, INR, USD, category, funnel, source link, remark),
-  //              then PEEK the dashboard verdict and Move Pass only if it would pass.
+  //              EVERY field, then PEEK the dashboard verdict and Move Pass if it passes.
   mode: 'pass',
   // The dashboard origin (same host as Dropy Auto-Validator). Origin only.
   dashboardOrigin: 'http://100.82.234.106:3000',
@@ -256,6 +257,28 @@ export const DEFAULT_SETTINGS = {
   alwaysSearchMarketplaces: false,
   availabilitySites: ['amazon_in', 'flipkart', 'nykaa', 'meesho', 'jiomart'],
   availabilityThreshold: 0.45,
+  // ---- Main-file mode (routes rows to Pass / Fail / Link NF / USA Link NF) ----
+  // BSR strictly below → RS, at/above or missing → DP. (Pass mode uses the
+  // category-specific CATEGORY_THRESHOLDS above; Main uses this single cutoff.)
+  bsrThreshold: 50000,
+  funnelBsrSource: 'india',              // 'india' | 'usa' | 'lower'
+  // Weight fallback when amazon.in lists none / an impossible value:
+  //   'gemini-web' (drive Gemini web UI) | 'chatgpt-web' | 'api' | 'off'
+  weightMode: 'gemini-web',
+  weightTolerance: 2.0,                  // Amazon vs LLM weight agree within this ×
+  // Category: try the static CATEGORY_MAP first (free), then the LLM classifier.
+  useLlmCategory: true,
+  categoryOnNoMatch: 'flag-blank',       // 'flag-blank' | 'closest'
+  // LLM API (only when weightMode/category use 'api').
+  llmProvider: 'gemini', llmApiKey: '', llmModel: '',
+  // Move-Fail rescue: if India price (₹ ÷ rate) < USA price, hunt a cheaper .com.
+  usdToInrRate: 95,
+};
+
+// Page-type classification strings shared across worker + content scripts.
+export const PAGE = {
+  PRODUCT: 'product', NOT_FOUND: 'not_found', UNAVAILABLE: 'unavailable',
+  CAPTCHA: 'captcha', OTHER: 'other',
 };
 
 export async function getSettings() {
