@@ -148,6 +148,25 @@
         <p class="hint">Only runs in <b>Pass</b> mode. The availability search adds up to 5 page loads per row — slow but that's the India check. Selectors are best-effort; dry-run first and send me any "tick failed" cell dumps to lock them.</p>
       </div>
       <div class="card">
+        <h3>Main-file mode — weight/category LLM</h3>
+        <div class="field"><label>Weight/category fallback source</label>
+          <select id="setWeightMode">
+            <option value="gemini-web">Gemini (web UI — sign in to gemini.google.com)</option>
+            <option value="chatgpt-web">ChatGPT (web UI — sign in to chatgpt.com)</option>
+            <option value="api">API key</option>
+            <option value="off">Off — flag missing weights for review</option>
+          </select>
+        </div>
+        <div class="btnrow">
+          <div class="field" style="flex:1"><label>API provider</label>
+            <select id="setLlmProvider"><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option></select>
+          </div>
+          <div class="field" style="flex:1"><label>API model (blank = default)</label><input id="setLlmModel" placeholder="default" /></div>
+        </div>
+        <div class="field"><label>API key (only for API mode)</label><input id="setLlmApiKey" type="password" placeholder="AIza… / sk-…" /></div>
+        <p class="hint">Used in <b>Main</b> mode only, as a FALLBACK — when Amazon's weight is missing/impossible, or category when the breadcrumb + CATEGORY_MAP don't resolve. Web modes drive your logged-in chat tab (no key).</p>
+      </div>
+      <div class="card">
         <h3>Category thresholds (DP if BSR missing or ≥)</h3>
         <table class="th">
           <tr><td>Beauty</td><td>60,000</td></tr>

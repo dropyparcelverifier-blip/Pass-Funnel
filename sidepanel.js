@@ -114,6 +114,10 @@ function fillSettings(st) {
   $('setPassEnrich').checked = st.passEnrich !== false;
   $('setCountSellers').checked = st.countSellers !== false;
   $('setCheckAvail').checked = st.checkAvailability !== false;
+  $('setWeightMode').value = st.weightMode || 'gemini-web';
+  $('setLlmProvider').value = st.llmProvider || 'gemini';
+  $('setLlmModel').value = st.llmModel || '';
+  $('setLlmApiKey').value = st.llmApiKey || '';
   updateModeHint();
 }
 $('btnSaveSettings').addEventListener('click', async () => {
@@ -128,6 +132,10 @@ $('btnSaveSettings').addEventListener('click', async () => {
     passEnrich: $('setPassEnrich').checked,
     countSellers: $('setCountSellers').checked,
     checkAvailability: $('setCheckAvail').checked,
+    weightMode: $('setWeightMode').value,
+    llmProvider: $('setLlmProvider').value,
+    llmModel: $('setLlmModel').value.trim(),
+    llmApiKey: $('setLlmApiKey').value.trim(),
   };
   const r = await send({ action: 'saveSettings', settings });
   appendLog({ ts: Date.now(), text: r?.ok ? 'settings saved' : 'save failed', kind: r?.ok ? 'ok' : 'err' });
