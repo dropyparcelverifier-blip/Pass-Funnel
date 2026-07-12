@@ -10,7 +10,7 @@
 // every field write but withholds the status-changing clicks (Pass / Link NF /
 // USA Link NF) so the human can audit accuracy before going live.
 
-import { K_MAIN as K, getSettings, PAGE, mapCategory } from '../config.js';
+import { K_MAIN as K, getSettings, PAGE, mapCategory, decideOrigin, decideChecklist, originLabels, checklistLabels } from '../config.js';
 import * as tab from './amazon-tab.js';
 import { analyzePrompt, parseAnalyze, analyzeApi } from './llm.js';
 import { askWeb, isWebMode, closeTab as closeLlmTab, setWindow as setLlmWindow } from './llm-web.js';
@@ -365,6 +365,9 @@ export function createMainEngine(ctx) {
     setStep('verify fields', asin);
     await ensureFieldsStick(asin, rec);
 
+    // Origin + Checklist (this row is a confirmed live amazon.in product → India).
+    await enrichMainRow(asin, rec, settings);
+
     // Final Source-Link write right before Pass (freshest = smallest revert window).
     if (rec.sourceLink) await writeField(asin, 'sourceLink', rec.sourceLink, rec);
 
@@ -564,6 +567,38 @@ export function createMainEngine(ctx) {
     const cl = await ctx.sendToDashboard({ type: clickType });
     if (!cl?.ok) { rec.flags.push(`${clickType} failed: ${cl?.error || ''}`); log(`${asin}: ${clickType} failed — ${cl?.error}`, 'err', asin); }
     else log(`${asin}: ${clickType} done`, 'ok', asin);
+  }
+
+  // Origin + Checklist ticking (shared with Pass/Failed modes). India is always
+  // true here — the row only reaches this point as a confirmed live amazon.in
+  // product. Checklist Multi/Brand come from the unique amazon.in seller count.
+  async function enrichMainRow(asin, rec, settings) {
+    if (settings.passEnrich === false) return;
+    let sellerCount = null;
+    if (settings.countSellers !== false) {
+      setStep('count sellers', asin);
+      try {
+        await loadAmazon(`${IN_ORIGIN}/gp/offer-listing/${asin}`, settings);
+        await detect();
+        for (let i = 0; i < 3; i++) {
+          const r = await tab.rpc({ type: 'SCRAPE_SELLERS' });
+          const c = Number.isFinite(r?.count) ? r.count : null;
+          if (c != null && (sellerCount == null || c > sellerCount)) sellerCount = c;
+          if (sellerCount != null && sellerCount >= 2) break;
+          await sleep(800);
+        }
+      } catch (e) { rec.flags.push('seller count failed: ' + e.message); }
+    }
+    rec.sellerCount = sellerCount;
+    const origin = decideOrigin({ indiaAvailable: true });
+    const checklist = decideChecklist({ weightGrams: rec.weightGrams, sellerCount });
+    const oLabels = originLabels(origin), cLabels = checklistLabels(checklist);
+    rec.origin = origin; rec.checklist = checklist;
+    log(`${asin}: origin[${oLabels.join(',')}] checklist[${cLabels.join(',')}] sellers=${sellerCount ?? '—'}`, 'info', asin);
+    if (settings.dryRun) { log(`${asin}: [dry-run] would tick Origin ${oLabels.join('+')} & Checklist ${cLabels.join('+')}`, 'info', asin); return; }
+    try { await ctx.focusDashboard?.(); } catch {}
+    try { const or = await ctx.sendToDashboard({ type: 'SET_ORIGIN', asin, labels: oLabels }); if (!or?.ok) rec.flags.push(`origin tick incomplete (${(or?.failed || []).join(',') || or?.error || '?'})`); } catch (e) { rec.flags.push('origin tick error: ' + e.message); }
+    try { const cr = await ctx.sendToDashboard({ type: 'SET_CHECKLIST', asin, labels: cLabels }); if (!cr?.ok) rec.flags.push(`checklist tick incomplete (${(cr?.failed || []).join(',') || cr?.error || '?'})`); } catch (e) { rec.flags.push('checklist tick error: ' + e.message); }
   }
 
   async function handleCategory(asin, rec, settings) {
