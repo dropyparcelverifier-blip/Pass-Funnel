@@ -1,19 +1,23 @@
 # Dropy Pass-Funnel Validator
 
-A **separate** Chrome/Edge (MV3) extension that validates rows in the Scrappy v2
-**Validation dashboard**. It has two modes:
+A Chrome/Edge (MV3) extension that validates rows in the Scrappy v2 **Validation
+dashboard**. It merges the *Dropy Auto-Validator* (Main file) and the
+*Pass-Funnel Validator* into one extension with three modes (pick one per run in
+the panel):
 
+- **Main file** — **full validate & route** each row: scrape amazon.in +
+  amazon.com, fix weight/INR/USD/category/funnel, and send it to **Pass / Move
+  Fail / Link NF / USA Link NF**. Uses the **LLM** (Gemini/ChatGPT web or API)
+  only as a fallback for missing weight and for category when the breadcrumb +
+  `CATEGORY_MAP` don't resolve. Also ticks Origin + Checklist.
 - **Pass file** — re-check the **funnel (RS/DP)** by category-specific BSR
-  thresholds, write the **BSR rank into Remark**, and tick the **Origin** and
-  **Checklist** columns.
-- **Failed file** — **full validation**: scrape amazon.in + amazon.com, fill/fix
-  **every** field (weight, INR, USD, category, funnel, remark), tick Origin +
-  Checklist, then peek the dashboard verdict and **Move Pass** any row that now
-  qualifies.
+  thresholds, write the **BSR rank into Remark**, tick **Origin** + **Checklist**.
+- **Failed file** — **full validation**: fill/fix every field, then peek the
+  verdict and **Move Pass** any row that now qualifies.
 
-It is independent from *Dropy Auto-Validator*: its own service worker, side
-panel, storage (`pfv*` keys), and managed Amazon tab. No LLM/Gemini chat. You
-can load and run both extensions at once.
+The two engines share one managed Amazon tab and one panel; their run-state is
+in separate storage namespaces (`pfv*` for Pass/Failed, `pfvm*` for Main) so
+they never collide. Settings and log are shared.
 
 ---
 
@@ -107,7 +111,10 @@ can load and run both extensions at once.
 | `manifest.json` | MV3 manifest (content scripts: amazon.in/.com + the 4 marketplaces) |
 | `config.js` | thresholds, `decideFunnel`/`remarkText`, category map, Origin/Checklist rules, marketplaces, settings |
 | `background.js` | service worker: dashboard registration, message router, engine host, auto-resume, CSV/JSON export |
-| `modules/engine.js` | the run loop: Pass + Failed pipelines, scrapes, enrichment, verdict |
+| `modules/engine.js` | Pass + Failed pipelines, scrapes, enrichment, verdict |
+| `modules/engine-main.js` | Main-file pipeline (validate & route Pass/Fail/Link NF/USA Link NF) |
+| `modules/llm.js` / `modules/llm-web.js` | weight/category LLM (prompts + API + web-UI driver) |
+| `content/llm-web.js` | content script that drives the Gemini/ChatGPT web tab |
 | `modules/amazon-tab.js` | the single managed Amazon tab (navigate/ping/rpc) |
 | `content/amazon.js` | amazon.in/.com scraper (BSR, weight, price, sellers, US location) |
 | `content/dashboard.js` | dashboard grid ops (read/write fields, funnel, category, Origin/Checklist, Remark modal, Move Pass) |
