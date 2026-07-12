@@ -614,7 +614,7 @@
     // The dashboard requires ALL of these (incl. INR) before it shows "Move
     // Pass". A valid .in product with no INR price can't be auto-passed — it's
     // flagged + left for manual review (user rule 2026-06-10).
-    const required = (opts && opts.required) || ['weight', 'inr', 'usd', 'sourceLink', 'category'];
+    const required = (opts && opts.required) || ['weight', 'inr', 'usd', 'category'];
     const vals = readRowFields(grid, row);
     const missing = required.filter(f => !vals[f]);
 

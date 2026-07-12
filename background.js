@@ -128,7 +128,7 @@ autoResumeIfNeeded('cold start');
 // ---- CSV export ------------------------------------------------------------
 function recordsToCsv(records) {
   const cols = ['asin', 'bsr', 'bsrCategory', 'thresholdKey', 'threshold', 'funnel', 'funnelChanged',
-    'weight', 'inr', 'usd', 'category', 'sourceLink', 'remark', 'verdict', 'moved', 'flags'];
+    'weight', 'inr', 'usd', 'category', 'remark', 'verdict', 'moved', 'flags'];
   const esc = v => { if (v == null) v = ''; if (Array.isArray(v)) v = v.join(' | '); v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   return cols.join(',') + '\n' + records.map(r => cols.map(c => esc(r[c])).join(',')).join('\n');
 }
