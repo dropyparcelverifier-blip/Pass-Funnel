@@ -44,6 +44,7 @@ function makeEnv(opts = {}) {
       return Promise.resolve({ ok: true, data });
     }
     if (msg.type === 'SCRAPE_SELLERS') return Promise.resolve({ ok: true, count: opts.sellerCount ?? null });
+    if (msg.type === 'SEARCH_AND_MATCH') return Promise.resolve({ ok: true, match: null, candidates: [] });
     if (msg.type === 'MP_SEARCH_SCRAPE') {
       const host = (String(url).match(/https?:\/\/([^/]+)/) || [])[1] || '';
       const hit = (opts.availableHosts || []).includes(host);
@@ -443,4 +444,82 @@ test('MERGE: Main engine runs an empty page to completion without error', async 
   const st = await waitDone(engine, 6000);
   assert.equal(st.running, false, 'run ended');
   assert.match(st.status, /done/i);
+});
+
+// ============================================================== MERGE (Main pipeline, live)
+function makeMainDashboard(rows) {
+  const calls = { byAsin: {}, all: [] };
+  const rec = a => (calls.byAsin[a] ||= { writes: {}, funnel: null, category: null, origin: null, checklist: null, peek: 0, pass: 0, usaLink: null });
+  const CAT_OPTS = ['Beauty - Other Products', 'Books', 'Health - Other Products', 'Automotive - Other Products',
+    'Accessories Electronics PC Wireless', 'Home - Other Products', 'Pet - Other Products'];
+  async function sendToDashboard(m) {
+    calls.all.push(m.type);
+    const a = m.asin;
+    switch (m.type) {
+      case 'READ_PAGE_ROWS': return { ok: true, rows };
+      case 'READ_PAGINATION': return { ok: true, pagination: { page: 1, totalPages: 1 } };
+      case 'HIGHLIGHT_ROW': return { ok: true };
+      case 'GET_CATEGORY_OPTIONS': return { ok: true, options: CAT_OPTS, selected: '' };
+      case 'WRITE_FIELD': rec(a).writes[m.field] = m.value; return { ok: true, corrected: false, now: m.value };
+      case 'SELECT_CATEGORY': rec(a).category = m.category; return { ok: true, chosen: m.category };
+      case 'SET_FUNNEL': rec(a).funnel = m.funnel; return { ok: true, changed: false, current: m.funnel };
+      case 'SET_USA_LINK': rec(a).usaLink = m.url; return { ok: true };
+      case 'READ_ROW_FIELDS': return { ok: true, fields: { weight: '200', inr: '499', usd: '9.99', sourceLink: 'https://www.amazon.com/dp/' + a, category: 'Beauty - Other Products', funnel: 'RS' } };
+      case 'CLICK_PASS': if (m.opts && m.opts.peek) { rec(a).peek++; return { ok: true, verdict: 'pass' }; } rec(a).pass++; return { ok: true, verdict: 'pass' };
+      case 'SET_ORIGIN': rec(a).origin = m.labels; return { ok: true, added: m.labels };
+      case 'SET_CHECKLIST': rec(a).checklist = m.labels; return { ok: true, added: m.labels };
+      default: return { ok: true };
+    }
+  }
+  return { sendToDashboard, calls };
+}
+async function runMain(rows, settings = {}, envOpts = {}) {
+  const { chrome } = makeEnv(envOpts);
+  global.chrome = chrome;
+  await chrome.storage.local.set({ pfvSettings: {
+    mode: 'main', dryRun: false, throttleMinMs: 0, throttleMaxMs: 0, pageTimeoutMs: 1200,
+    showWorkingTab: false, weightMode: 'off', useLlmCategory: false, passEnrich: true, countSellers: true,
+    bsrThreshold: 50000, usZip: '10001', dashboardOrigin: 'http://localhost:3000', ...settings,
+  } });
+  const { createMainEngine } = await import(mainEngineUrl());
+  const dash = makeMainDashboard(rows);
+  const engine = createMainEngine({
+    log: () => {}, sendToDashboard: dash.sendToDashboard,
+    focusDashboard: async () => {}, getWorkingWindowId: async () => null, emit: () => {},
+  });
+  await engine.hydrated;
+  await engine.start();
+  return { engine, dash };
+}
+
+test('MERGE (Main): a live product routes to PASS, with mapped category + Origin/Checklist', async () => {
+  const rows = [R('B0AAAA1111', { title: 'Glass Seed Beads White', brand: 'Mill Hill' })];
+  const { engine, dash } = await runMain(rows, {}, { sellerCount: 9 });
+  const st = await waitDone(engine, 8000);
+  assert.match(st.status, /done/i, 'run completed');
+  assert.equal(st.counters.processed, 1);
+  assert.equal(st.counters.passed, 1, 'row passed');
+  const a = dash.calls.byAsin.B0AAAA1111;
+  // accuracy: Amazon "Beauty & Personal Care" mapped to the dashboard taxonomy, no LLM
+  assert.equal(a.category, 'Beauty - Other Products', 'category via CATEGORY_MAP');
+  // funnel from India BSR 12345 < 50000 -> RS
+  assert.equal(a.funnel, 'RS');
+  // fields written from the scrapes (engine may write numbers; the content
+  // script String()s them, so compare loosely)
+  assert.equal(String(a.writes.weight), '200'); assert.equal(String(a.writes.usd), '9.99');
+  // enrichment: Origin US+India (live .in product), Checklist Brand+Multi (9 sellers)
+  assert.deepEqual(a.origin, ['US', 'India']);
+  assert.deepEqual(a.checklist, ['Brand', 'Expire', 'Size', 'Multi']);
+  assert.ok(a.pass >= 1, 'Move Pass clicked');
+});
+
+test('MERGE (Main): a dead amazon.in page routes to Link NF (no field writes)', async () => {
+  const rows = [R('B0DEAD0000', { title: 'Gone', brand: 'X' })];
+  const { engine, dash } = await runMain(rows, {}, { detect: () => 'not_found' });
+  const st = await waitDone(engine, 8000);
+  assert.match(st.status, /done/i);
+  assert.equal(st.counters.linkNf, 1, 'routed to Link NF');
+  assert.equal(st.counters.passed, 0);
+  const a = dash.calls.byAsin.B0DEAD0000;
+  assert.equal(a && a.pass || 0, 0, 'never clicked Pass');
 });
