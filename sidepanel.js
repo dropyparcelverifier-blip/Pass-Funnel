@@ -57,12 +57,19 @@ function renderLog(lines) {
 let uiState = { running: false, paused: false, pausedByCaptcha: false };
 function renderControls() {
   const { running, paused, pausedByCaptcha } = uiState;
-  $('btnStart').disabled = running;
-  $('btnStop').disabled = !running && !paused && !pausedByCaptcha;
+  const busy = running || paused || pausedByCaptcha;
+  // Start only from a clean idle state — while paused, Resume continues and
+  // Restart starts fresh, so Start here would just silently wipe progress.
+  $('btnStart').disabled = busy;
+  $('btnStop').disabled = !busy;
   const pb = $('btnPause');
-  if (paused || pausedByCaptcha) { pb.textContent = 'Resume'; pb.dataset.act = 'resumeRun'; pb.disabled = false; }
+  if (paused || pausedByCaptcha) { pb.textContent = '▶ Resume'; pb.dataset.act = 'resumeRun'; pb.disabled = false; }
   else if (running) { pb.textContent = '⏸ Pause'; pb.dataset.act = 'pauseRun'; pb.disabled = false; }
   else { pb.textContent = '⏸ Pause'; pb.dataset.act = 'pauseRun'; pb.disabled = true; }
+  // Lock mode switching while a run is active — flipping mode swaps engines and
+  // would leave the current one running invisibly.
+  $('modeSeg').classList.toggle('locked', busy);
+  document.querySelectorAll('#modeSeg button').forEach(b => { b.disabled = busy; });
 }
 function renderState(s) {
   if (!s) return;
@@ -93,6 +100,7 @@ $('btnStart').addEventListener('click', () => ctrl('startRun'));
 $('btnStop').addEventListener('click', () => ctrl('stopRun'));
 $('btnPause').addEventListener('click', () => ctrl($('btnPause').dataset.act || 'pauseRun'));
 $('btnRestart').addEventListener('click', async () => {
+  if (!confirm('Restart clears all progress + the log and runs from the top. Continue?')) return;
   const b = $('btnRestart'), o = b.textContent; b.disabled = true; b.textContent = 'Restarting…';
   appendLog({ ts: Date.now(), text: 'restart — clearing + starting fresh…', kind: 'info' });
   const r = await send({ action: 'restartRun' });
@@ -104,6 +112,7 @@ $('btnCloseTabs').addEventListener('click', async () => {
   await send({ action: 'closeTabs' }); renderState(await send({ action: 'getState' })); b.disabled = false; b.textContent = o;
 });
 $('btnReset').addEventListener('click', async () => {
+  if (!confirm('Reset clears all progress + the log and returns to Idle. Continue?')) return;
   const b = $('btnReset'), o = b.textContent; b.disabled = true; b.textContent = 'Resetting…';
   const r = await send({ action: 'resetRun' });
   appendLog({ ts: Date.now(), text: r?.ok ? 'progress + log reset' : 'reset failed', kind: r?.ok ? 'ok' : 'err' });

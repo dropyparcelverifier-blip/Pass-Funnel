@@ -66,6 +66,8 @@
       padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s; }
     .seg button:hover { color:var(--txt); }
     .seg button.active { color:#fff; background:var(--grad); box-shadow:0 2px 8px -2px rgba(91,140,255,.6); }
+    .seg.locked { opacity:.5; }
+    .seg.locked button { cursor:not-allowed; }
 
     /* ---- buttons ---- */
     .btnrow { display:flex; gap:7px; margin-bottom:9px; flex-wrap:wrap; }
@@ -176,13 +178,13 @@
       <p class="hint" id="modeHint" style="margin:0 0 11px">Open the matching file view on the dashboard, then Start.</p>
 
       <div class="switchrow">
-        <label class="switch"><input type="checkbox" id="dryRun" /><span class="track"></span><span class="thumb"></span></label>
+        <label class="switch"><input type="checkbox" id="dryRun" aria-label="Dry-run — compute everything but never write to the dashboard" /><span class="track"></span><span class="thumb"></span></label>
         <div class="sw-txt"><b>Dry-run</b><small>Compute everything, write nothing</small></div>
         <span class="state-tag live" id="dryTag">LIVE</span>
       </div>
 
       <div class="btnrow">
-        <button class="act primary" id="btnStart" title="Begin — auto-resumes an interrupted run, or a fresh pass from the top">▶ Start</button>
+        <button class="act primary" id="btnStart" title="Start a fresh run from the top (skips ASINs already done). Use Resume to continue a paused run.">▶ Start</button>
         <button class="act" id="btnPause">⏸ Pause</button>
         <button class="act danger" id="btnStop">⏹ Stop</button>
       </div>
@@ -190,7 +192,7 @@
         <button class="act mini" id="btnRestart" title="Stop, clear progress + log, run fresh">⟳ Restart</button>
         <button class="act mini" id="btnExportCsv">⬇ CSV</button>
         <button class="act mini" id="btnExportJson">⬇ JSON</button>
-        <button class="act mini" id="btnCloseTabs">✕ Tab</button>
+        <button class="act mini" id="btnCloseTabs" title="Close the managed Amazon tab">✕ Tab</button>
         <button class="act mini danger" id="btnReset">↺ Reset</button>
       </div>
 
@@ -207,7 +209,7 @@
           <div class="k">Step</div><div class="v" id="curStep">—</div>
           <div class="k">Page</div><div class="v" id="curPage">—</div>
         </div>
-        <div class="prog"><div class="prog-fill" id="progFill"></div></div>
+        <div class="prog" role="progressbar" aria-label="Page progress"><div class="prog-fill" id="progFill"></div></div>
       </div>
 
       <div class="card">
