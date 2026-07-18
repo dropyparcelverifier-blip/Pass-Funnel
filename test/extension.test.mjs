@@ -447,7 +447,9 @@ test('MERGE: Main engine runs an empty page to completion without error', async 
 });
 
 // ============================================================== MERGE (Main pipeline, live)
-function makeMainDashboard(rows) {
+function makeMainDashboard(rows, opts = {}) {
+  const verdict = opts.verdict || 'pass';
+  const funnelOk = opts.funnelOk !== false;
   const calls = { byAsin: {}, all: [] };
   const rec = a => (calls.byAsin[a] ||= { writes: {}, funnel: null, category: null, origin: null, checklist: null, peek: 0, pass: 0, usaLink: null });
   const CAT_OPTS = ['Beauty - Other Products', 'Books', 'Health - Other Products', 'Automotive - Other Products',
@@ -462,10 +464,10 @@ function makeMainDashboard(rows) {
       case 'GET_CATEGORY_OPTIONS': return { ok: true, options: CAT_OPTS, selected: '' };
       case 'WRITE_FIELD': rec(a).writes[m.field] = m.value; return { ok: true, corrected: false, now: m.value };
       case 'SELECT_CATEGORY': rec(a).category = m.category; return { ok: true, chosen: m.category };
-      case 'SET_FUNNEL': rec(a).funnel = m.funnel; return { ok: true, changed: false, current: m.funnel };
+      case 'SET_FUNNEL': rec(a).funnel = m.funnel; return { ok: funnelOk, changed: false, current: funnelOk ? m.funnel : 'DP' };
       case 'SET_USA_LINK': rec(a).usaLink = m.url; return { ok: true };
       case 'READ_ROW_FIELDS': return { ok: true, fields: { weight: '200', inr: '499', usd: '9.99', sourceLink: 'https://www.amazon.com/dp/' + a, category: 'Beauty - Other Products', funnel: 'RS' } };
-      case 'CLICK_PASS': if (m.opts && m.opts.peek) { rec(a).peek++; return { ok: true, verdict: 'pass' }; } rec(a).pass++; return { ok: true, verdict: 'pass' };
+      case 'CLICK_PASS': if (m.opts && m.opts.peek) { rec(a).peek++; return { ok: true, verdict }; } rec(a).pass++; return { ok: true, verdict };
       case 'SET_ORIGIN': rec(a).origin = m.labels; return { ok: true, added: m.labels };
       case 'SET_CHECKLIST': rec(a).checklist = m.labels; return { ok: true, added: m.labels };
       default: return { ok: true };
@@ -473,7 +475,7 @@ function makeMainDashboard(rows) {
   }
   return { sendToDashboard, calls };
 }
-async function runMain(rows, settings = {}, envOpts = {}) {
+async function runMain(rows, settings = {}, envOpts = {}, dashOpts = {}) {
   const { chrome } = makeEnv(envOpts);
   global.chrome = chrome;
   await chrome.storage.local.set({ pfvSettings: {
@@ -482,7 +484,7 @@ async function runMain(rows, settings = {}, envOpts = {}) {
     bsrThreshold: 50000, usZip: '10001', dashboardOrigin: 'http://localhost:3000', ...settings,
   } });
   const { createMainEngine } = await import(mainEngineUrl());
-  const dash = makeMainDashboard(rows);
+  const dash = makeMainDashboard(rows, dashOpts);
   const engine = createMainEngine({
     log: () => {}, sendToDashboard: dash.sendToDashboard,
     focusDashboard: async () => {}, getWorkingWindowId: async () => null, emit: () => {},
@@ -522,4 +524,110 @@ test('MERGE (Main): a dead amazon.in page routes to Link NF (no field writes)', 
   assert.equal(st.counters.passed, 0);
   const a = dash.calls.byAsin.B0DEAD0000;
   assert.equal(a && a.pass || 0, 0, 'never clicked Pass');
+});
+
+// ============================================================== SCENARIOS (exhaustive)
+const inData = (over) => (asin) => ({ asin, bsrPrimary: 12345, bsrPrimaryCategory: 'Beauty & Personal Care',
+  categoryPath: ['Beauty & Personal Care'], weightGrams: 200, priceValue: 499, currency: 'INR',
+  canonicalUrl: `https://www.amazon.in/dp/${asin}`, ...over });
+
+// ---- Pass mode ----
+test('SCENARIO Pass: funnel corrected when wrong (counter ticks)', async () => {
+  const { engine, dash } = await runEngine({ rows: [R('B0PASS0001')], settings: { mode: 'pass', passEnrich: false } });
+  const st = await waitDone(engine);
+  assert.equal(dash.calls.byAsin.B0PASS0001.funnel, 'RS');
+  assert.equal(st.counters.funnelChanged, 1);
+});
+test('SCENARIO Pass: BSR missing → DP + "not available" remark', async () => {
+  const { engine, dash } = await runEngine({ rows: [R('B0PASS0002')], settings: { mode: 'pass', passEnrich: false },
+    env: { indiaData: inData({ bsrPrimary: null }) } });
+  await waitDone(engine);
+  const d = dash.calls.byAsin.B0PASS0002;
+  assert.equal(d.funnel, 'DP');
+  assert.match(d.writes.remark, /not available/i);
+});
+test('SCENARIO Pass: category thresholds (sports 25k→RS, 35k→DP)', async () => {
+  const a = await runEngine({ rows: [R('B0SPORT001')], settings: { mode: 'pass', passEnrich: false },
+    env: { indiaData: inData({ bsrPrimary: 25000, bsrPrimaryCategory: 'Sports, Fitness & Outdoors', categoryPath: ['Sports'] }) } });
+  await waitDone(a.engine); assert.equal(a.dash.calls.byAsin.B0SPORT001.funnel, 'RS');
+  const b = await runEngine({ rows: [R('B0SPORT002')], settings: { mode: 'pass', passEnrich: false },
+    env: { indiaData: inData({ bsrPrimary: 35000, bsrPrimaryCategory: 'Sports, Fitness & Outdoors', categoryPath: ['Sports'] }) } });
+  await waitDone(b.engine); assert.equal(b.dash.calls.byAsin.B0SPORT002.funnel, 'DP');
+});
+
+// ---- Failed mode ----
+test('SCENARIO Failed: weight mismatch (.in vs .com >15%) is flagged', async () => {
+  const { engine } = await runEngine({ rows: [R('B0WMIS0001')], verdicts: { B0WMIS0001: 'fail' }, settings: { mode: 'failed' },
+    env: { usaData: (asin) => ({ asin, priceValue: 9.99, currency: 'USD', weightGrams: 900, canonicalUrl: `https://www.amazon.com/dp/${asin}` }) } });
+  const st = await waitDone(engine);
+  const rec = engine.getRecords().find(r => r.asin === 'B0WMIS0001');
+  assert.ok(rec.flags.some(f => /weight mismatch/i.test(f)), 'weight mismatch flagged');
+  assert.ok(st.counters.flagged >= 1);
+});
+test('SCENARIO Main: non-INR .in currency is written but flagged', async () => {
+  const { engine } = await runMain([R('B0CURR0001')], {}, { sellerCount: 3, indiaData: inData({ currency: 'USD' }) });
+  await waitDone(engine, 8000);
+  const rec = engine.getRecords().find(r => r.asin === 'B0CURR0001');
+  assert.ok(rec.flags.some(f => /INR currency/i.test(f)), 'Main flags a non-INR amazon.in price');
+});
+
+// ---- Main mode ----
+test('SCENARIO Main: a .com India link is rewritten to .in and still passes', async () => {
+  const rows = [{ asin: 'B0RWRT0001', indiaUrl: 'https://www.amazon.com/dp/B0RWRT0001', usaUrl: 'https://www.amazon.com/dp/B0RWRT0001' }];
+  const { engine } = await runMain(rows, {}, { sellerCount: 3 });
+  const st = await waitDone(engine, 8000);
+  assert.equal(st.counters.linkNf, 0, 'not Link NF — link was rewritten');
+  assert.equal(st.counters.passed, 1);
+});
+test('SCENARIO Main: .in redirect to a DIFFERENT ASIN → Link NF', async () => {
+  const { engine } = await runMain([R('B0REDIR001')], {}, { indiaData: () => inData({})('B0OTHER999') });
+  const st = await waitDone(engine, 8000);
+  assert.equal(st.counters.linkNf, 1, 'wrong-product redirect routes to Link NF');
+  assert.equal(st.counters.passed, 0);
+});
+test('SCENARIO Main: funnel that cannot be set → NOT passed, flagged', async () => {
+  const { engine } = await runMain([R('B0FUNN0001')], {}, { sellerCount: 3 }, { funnelOk: false });
+  const st = await waitDone(engine, 8000);
+  assert.equal(st.counters.passed, 0, 'not passed with an unfixable funnel');
+  assert.ok(st.counters.flagged >= 1);
+});
+test('SCENARIO Main: FAIL verdict (profitable, no rescue) → Move Fail', async () => {
+  // High INR so India price > USA price → profitable → no cheaper-.com rescue.
+  const { engine } = await runMain([R('B0FAIL0001')], {}, { sellerCount: 3, indiaData: inData({ priceValue: 99999 }) }, { verdict: 'fail' });
+  const st = await waitDone(engine, 8000);
+  assert.equal(st.counters.failed, 1, 'routed to Move Fail');
+  assert.equal(st.counters.passed, 0);
+});
+test('SCENARIO Main: dry-run fills fields but commits NO verdict', async () => {
+  // Main dry-run (unlike Pass/Failed) DOES write fields; it only withholds the
+  // status-changing clicks (Pass / Fail / Link NF).
+  const { engine, dash } = await runMain([R('B0DRYM0001')], { dryRun: true }, { sellerCount: 9 });
+  const st = await waitDone(engine, 8000);
+  assert.equal(st.counters.processed, 1);
+  assert.equal(st.counters.passed, 0); assert.equal(st.counters.failed, 0); assert.equal(st.counters.linkNf, 0);
+  assert.equal(dash.calls.byAsin.B0DRYM0001 && dash.calls.byAsin.B0DRYM0001.pass || 0, 0, 'no Move Pass click in dry-run');
+});
+
+// ---- config edge cases ----
+test('SCENARIO config: decideFunnel boundary is inclusive (>= threshold → DP)', async () => {
+  const cfg = await import(configUrl);
+  assert.equal(cfg.decideFunnel(50000, 'other', '').funnel, 'DP');   // exactly at cutoff
+  assert.equal(cfg.decideFunnel(49999, 'other', '').funnel, 'RS');
+  assert.equal(cfg.decideFunnel(60000, 'Beauty & Personal Care', '').funnel, 'DP');
+  assert.equal(cfg.decideFunnel(59999, 'Beauty & Personal Care', '').funnel, 'RS');
+});
+test('SCENARIO config: thresholdFor resolves every category key', async () => {
+  const cfg = await import(configUrl);
+  assert.equal(cfg.thresholdFor('Sports, Fitness & Outdoors', '').key, 'sports');
+  assert.equal(cfg.thresholdFor('Baby Products', '').key, 'baby');
+  assert.equal(cfg.thresholdFor('Musical Instruments', '').key, 'musical');
+  assert.equal(cfg.thresholdFor('Random Unknown', '').key, 'other');
+});
+test('SCENARIO config: mapCategory covers more departments', async () => {
+  const cfg = await import(configUrl);
+  assert.equal(cfg.mapCategory('Toys & Games'), 'Toys - Other Products');
+  assert.equal(cfg.mapCategory('Office Products'), 'Office - Other Products');
+  assert.equal(cfg.mapCategory('Shoes & Handbags'), 'Shoes');
+  assert.equal(cfg.mapCategory('Watches'), 'Watches');
+  assert.equal(cfg.mapCategory('Electronics'), 'Electronic Devices excl TV Camera');
 });
