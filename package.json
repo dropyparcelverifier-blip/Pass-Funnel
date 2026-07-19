@@ -2,6 +2,7 @@
   "name": "pass-funnel-validator",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Dropy Pass-Funnel Validator — Chrome extension. Node test suite for the engine + config logic.",
   "scripts": {
     "test": "node --test"

@@ -1,0 +1,50 @@
+name: daily-smoke-test
+
+# Runs the real Node test suite (engine + config + merge + scenarios) once a day
+# and records the result to .ci/smoke-history.md — a genuine, non-empty commit
+# authored by sagar21-creator (so it counts on the graph) that also gives a
+# dated pass/fail history of the extension logic. Trigger anytime via "Run
+# workflow" (workflow_dispatch).
+on:
+  schedule:
+    - cron: '23 5 * * *'    # ~05:23 UTC daily (GitHub cron is best-effort)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-smoke-test
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run test suite
+        id: t
+        run: |
+          set +e
+          OUT="$(npm test 2>&1)"
+          echo "$OUT" | tail -25
+          echo "pass=$(printf '%s' "$OUT" | grep -oiE 'pass[^0-9]*[0-9]+' | grep -oE '[0-9]+' | head -1)" >> "$GITHUB_OUTPUT"
+          echo "fail=$(printf '%s' "$OUT" | grep -oiE 'fail[^0-9]*[0-9]+' | grep -oE '[0-9]+' | head -1)" >> "$GITHUB_OUTPUT"
+      - name: Record result
+        run: |
+          set -e
+          git config user.name  "sagar21-creator"
+          git config user.email "55117902+sagar21-creator@users.noreply.github.com"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          mkdir -p .ci
+          printf '%s — %s passed, %s failed (run %s)\n' \
+            "$(date -u +%FT%TZ)" "${{ steps.t.outputs.pass }}" "${{ steps.t.outputs.fail }}" "${GITHUB_RUN_NUMBER}" \
+            >> .ci/smoke-history.md
+          git add .ci/smoke-history.md
+          git commit -m "ci: daily smoke-test $(date -u +%F) — ${{ steps.t.outputs.pass }} passed [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
