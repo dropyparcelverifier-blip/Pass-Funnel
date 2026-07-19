@@ -806,6 +806,9 @@ export function createMainEngine(ctx) {
   async function writeField(asin, field, value, rec) {
     const r = await ctx.sendToDashboard({ type: 'WRITE_FIELD', asin, field, value });
     if (!r?.ok) {
+      // This dashboard has no Source Link column (the USA Link is the source) —
+      // treat a missing sourceLink column as a benign skip, not a per-row error.
+      if (field === 'sourceLink' && /no column mapped/i.test(r?.error || '')) return true;
       rec.flags.push(`write ${field} failed: ${r?.error || ''}`);
       log(`${asin}: write ${field} failed — ${r?.error}`, 'err', asin);
       if (r?.cellHtml) { rec[`${field}DebugHtml`] = r.cellHtml; log(`${asin}: ${field.toUpperCase()}-CELL (copy & send): ${String(r.cellHtml).slice(0, 600)}`, 'info', asin); }
