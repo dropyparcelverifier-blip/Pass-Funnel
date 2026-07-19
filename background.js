@@ -134,11 +134,20 @@ try { chrome.runtime.onStartup?.addListener(() => autoResumeIfNeeded('browser st
 autoResumeIfNeeded('cold start');
 
 // ---- CSV export ------------------------------------------------------------
+// One schema across all three modes. Field names differ between the Pass/Failed
+// engine and the Main engine (weight vs weightGrams, bsrCategory vs
+// amazonCategory, moved/verdict vs branch/passed), so `val` aliases them.
 function recordsToCsv(records) {
-  const cols = ['asin', 'bsr', 'bsrCategory', 'thresholdKey', 'threshold', 'funnel', 'funnelChanged',
-    'weight', 'inr', 'usd', 'category', 'remark', 'verdict', 'moved', 'flags'];
+  const cols = ['asin', 'title', 'brand', 'branch', 'funnel', 'funnelChanged',
+    'bsr', 'bsrCategory', 'weight', 'weightSource', 'inr', 'usd', 'category', 'sourceLink',
+    'remark', 'verdict', 'passed', 'moved', 'flags'];
+  const val = (r, c) => {
+    if (c === 'weight') return r.weight ?? r.weightGrams;
+    if (c === 'bsrCategory') return r.bsrCategory ?? r.amazonCategory;
+    return r[c];
+  };
   const esc = v => { if (v == null) v = ''; if (Array.isArray(v)) v = v.join(' | '); v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-  return cols.join(',') + '\n' + records.map(r => cols.map(c => esc(r[c])).join(',')).join('\n');
+  return cols.join(',') + '\n' + records.map(r => cols.map(c => esc(val(r, c))).join(',')).join('\n');
 }
 
 // ---- message router --------------------------------------------------------
