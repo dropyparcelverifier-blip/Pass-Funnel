@@ -27,14 +27,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Environment
+        run: node --version && npm --version && pwd
       - name: Run test suite
         id: t
         run: |
           set +e
           OUT="$(npm test 2>&1)"
-          echo "$OUT" | tail -25
-          echo "pass=$(printf '%s' "$OUT" | grep -oiE 'pass[^0-9]*[0-9]+' | grep -oE '[0-9]+' | head -1)" >> "$GITHUB_OUTPUT"
-          echo "fail=$(printf '%s' "$OUT" | grep -oiE 'fail[^0-9]*[0-9]+' | grep -oE '[0-9]+' | head -1)" >> "$GITHUB_OUTPUT"
+          echo "$OUT" | tail -40
+          echo "pass=$(printf '%s' "$OUT" | grep -oiE '(^| )pass [0-9]+' | grep -oE '[0-9]+' | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "fail=$(printf '%s' "$OUT" | grep -oiE '(^| )fail [0-9]+' | grep -oE '[0-9]+' | tail -1)" >> "$GITHUB_OUTPUT"
+          # Capture failing test names (TAP 'not ok' / runner '✖') for diagnosis.
+          printf '%s' "$OUT" | grep -E '^not ok|^✖|✖ ' | sed -E 's/^(not ok [0-9]+ - |✖ ?)//' | head -20 > /tmp/fails.txt || true
       - name: Record result
         run: |
           set -e
@@ -42,9 +46,13 @@ jobs:
           git config user.email "55117902+sagar21-creator@users.noreply.github.com"
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
           mkdir -p .ci
-          printf '%s — %s passed, %s failed (run %s)\n' \
-            "$(date -u +%FT%TZ)" "${{ steps.t.outputs.pass }}" "${{ steps.t.outputs.fail }}" "${GITHUB_RUN_NUMBER}" \
-            >> .ci/smoke-history.md
+          {
+            printf '%s — %s passed, %s failed (run %s)\n' \
+              "$(date -u +%FT%TZ)" "${{ steps.t.outputs.pass }}" "${{ steps.t.outputs.fail }}" "${GITHUB_RUN_NUMBER}"
+            if [ "${{ steps.t.outputs.fail }}" != "0" ] && [ -s /tmp/fails.txt ]; then
+              sed 's/^/    ✖ /' /tmp/fails.txt
+            fi
+          } >> .ci/smoke-history.md
           git add .ci/smoke-history.md
           git commit -m "ci: daily smoke-test $(date -u +%F) — ${{ steps.t.outputs.pass }} passed [skip ci]"
           git push origin "HEAD:${GITHUB_REF_NAME}"

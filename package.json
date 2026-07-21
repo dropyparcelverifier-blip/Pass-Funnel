@@ -5,6 +5,6 @@
   "type": "module",
   "description": "Dropy Pass-Funnel Validator — Chrome extension. Node test suite for the engine + config logic.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1"
   }
 }
