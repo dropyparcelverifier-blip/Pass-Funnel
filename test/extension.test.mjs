@@ -639,3 +639,17 @@ test('SCENARIO Main: weight mismatch (.in vs .com >15%) is flagged', async () =>
   const rec = engine.getRecords().find(r => r.asin === 'B0WMISM001');
   assert.ok(rec.flags.some(f => /weight mismatch/i.test(f)), 'Main flags .in vs .com weight mismatch');
 });
+
+test('SCENARIO config: mapCategory extended departments', async () => {
+  const cfg = await import(configUrl);
+  assert.equal(cfg.mapCategory('Televisions'), 'Television');
+  assert.equal(cfg.mapCategory('Refrigerators'), 'Refrigerators');
+  assert.equal(cfg.mapCategory('Printers & Scanners'), 'Scanners and Printers');
+  assert.equal(cfg.mapCategory('Power Banks'), 'Power Banks and Chargers');
+  assert.equal(cfg.mapCategory('Sunglasses'), 'Eyewear Sunglasses Frames');
+  assert.equal(cfg.mapCategory('Backpacks'), 'Backpacks');
+  assert.equal(cfg.mapCategory('Mattresses'), 'Mattresses');
+  assert.equal(cfg.mapCategory('Bedsheets & Pillow Covers'), 'Bedsheets Blankets Covers');
+  assert.equal(cfg.mapCategory('Wall Art'), 'Wall Art');
+  assert.equal(cfg.mapCategory('Cycling'), 'Bicycles');
+});

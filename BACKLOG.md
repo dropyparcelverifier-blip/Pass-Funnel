@@ -8,8 +8,6 @@ LLM) is marked and skipped by the unattended agent.
 ## Ready (no browser needed)
 - [ ] **Conservative overwrite mode.** Add setting `overwritePolicy: 'fresh' | 'fill-empty' | 'flag-only'`. In Failed/Main field writes: `fresh` = current behavior; `fill-empty` = only write when the cell is empty; `flag-only` = never overwrite, just flag differences. Wire in `writeCell`/`writeField`; add tests.
 - [ ] **Main dry-run write-free toggle.** Add `mainDryRunWrites: true` (default keeps current fill-fields behavior). When false, Main dry-run skips field writes like Pass/Failed. Gate `writeField` in dry-run; add a test.
-- [ ] **Weight cross-check in Main.** Port the Failed-mode `.in` vs `.com` weight-mismatch flag (>15%) into the Main pipeline; add a test.
-- [ ] **Category map coverage.** Add more Amazon departments to `CATEGORY_MAP` (grocery subtypes, apparel subtypes, kitchen, jewellery, luggage, garden). One test per addition asserting the exact dashboard option.
 - [ ] **Dedup shared helpers.** Extract common pure helpers used by both `engine.js` and `engine-main.js` (sleep/rand/host utils, funnel decision) into `modules/shared.js`; import in both. Tests stay green.
 - [ ] **More scenario tests.** Add edge cases: throttle boundaries, pagination advance, `READ_PAGE_ROWS` retry path, empty PASS file → Done, captcha auto-resume timing.
 - [ ] **Inline docs / JSDoc.** Add concise JSDoc to the exported config functions and the engine public API. No behavior change; tests green.
@@ -21,6 +19,9 @@ LLM) is marked and skipped by the unattended agent.
 - [ ] Tune `CATEGORY_MAP` from real category-miss logs.
 
 ## Done
+- [x] Weight cross-check in Main (`.in` vs `.com`, flag >15%).
+- [x] Category map coverage — TV, fridge, printer/scanner, power bank, sunglasses, backpack, mattress, bedsheet, wall art, bicycle.
+- [x] Fix red CI (serialize tests, --test-concurrency=1) + failing-name diagnostics.
 - [x] Merge Main-file extension into this project (Main/Pass/Failed, isolated storage).
 - [x] Map-first category + Origin/Checklist in Main; Main counters + LLM settings UI.
 - [x] Suppress Main Source Link write; drop unused `alarms` permission; unified CSV.
