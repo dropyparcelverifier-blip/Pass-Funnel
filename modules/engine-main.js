@@ -354,6 +354,17 @@ export function createMainEngine(ctx) {
       await writeField(asin, 'weight', rec.weightGrams, rec);
     }
 
+    // Cross-check amazon.in vs amazon.com weight (same guard as Failed mode). A
+    // big gap usually means a wrong .com match or a parse error — flag it and
+    // keep the .in-derived value (skip when the weight itself came from .com).
+    if (Number.isFinite(rec.weightGrams) && rec.weightGrams > 0 && rec.usaWeightGrams > 0 && rec.weightSource !== 'amazon-usa') {
+      const diff = Math.abs(rec.weightGrams - rec.usaWeightGrams) / Math.max(rec.weightGrams, rec.usaWeightGrams);
+      if (diff > 0.15) {
+        rec.flags.push(`weight mismatch: IN ${rec.weightGrams}g vs US ${rec.usaWeightGrams}g`);
+        log(`${asin}: weight mismatch — amazon.in ${rec.weightGrams}g vs amazon.com ${rec.usaWeightGrams}g (${Math.round(diff * 100)}% apart)`, 'warn', asin);
+      }
+    }
+
     // 7) category ----------------------------------------------------------
     await showDash();
     setStep('select category', asin);

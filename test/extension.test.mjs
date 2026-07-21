@@ -631,3 +631,11 @@ test('SCENARIO config: mapCategory covers more departments', async () => {
   assert.equal(cfg.mapCategory('Watches'), 'Watches');
   assert.equal(cfg.mapCategory('Electronics'), 'Electronic Devices excl TV Camera');
 });
+
+test('SCENARIO Main: weight mismatch (.in vs .com >15%) is flagged', async () => {
+  const { engine } = await runMain([R('B0WMISM001')], {}, { sellerCount: 3,
+    usaData: (asin) => ({ asin, priceValue: 9.99, currency: 'USD', weightGrams: 900, canonicalUrl: `https://www.amazon.com/dp/${asin}` }) });
+  await waitDone(engine, 8000);
+  const rec = engine.getRecords().find(r => r.asin === 'B0WMISM001');
+  assert.ok(rec.flags.some(f => /weight mismatch/i.test(f)), 'Main flags .in vs .com weight mismatch');
+});
