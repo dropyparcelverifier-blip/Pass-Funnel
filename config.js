@@ -302,6 +302,7 @@ export const DEFAULT_SETTINGS = {
 export const PAGE = {
   PRODUCT: 'product', NOT_FOUND: 'not_found', UNAVAILABLE: 'unavailable',
   CAPTCHA: 'captcha', OTHER: 'other',
+  RATE_LIMITED: 'rate_limited', BLOCKED: 'blocked',
 };
 
 export async function getSettings() {
