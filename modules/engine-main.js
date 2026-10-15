@@ -181,7 +181,7 @@ export function createMainEngine(ctx) {
         emit();
         await sleep(backoff);
         checkControl();
-        try { await tab.reload(); } catch {}
+        try { await tab.reload(); } catch { return PAGE.RATE_LIMITED; }
         await sleep(2000);
         continue;
       }
@@ -193,9 +193,10 @@ export function createMainEngine(ctx) {
         emit();
         await sleep(backoff);
         checkControl();
-        try { await tab.reload(); } catch {}
+        try { await tab.reload(); } catch { return PAGE.BLOCKED; }
         await sleep(3000);
-        const r2 = await tab.rpc({ type: 'DETECT_PAGE_TYPE' });
+        let r2;
+        try { r2 = await tab.rpc({ type: 'DETECT_PAGE_TYPE' }); } catch { return PAGE.BLOCKED; }
         if (r2?.pageType === PAGE.BLOCKED || r2?.pageType === PAGE.RATE_LIMITED) {
           log('Still blocked after backoff — flagging row', 'warn');
           return r2.pageType;
