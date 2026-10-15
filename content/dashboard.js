@@ -830,7 +830,7 @@
     let cb = row.el.querySelector('input[type="checkbox"]');
     if (cb) {
       if (!cb.checked) cb.click();
-      if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('click', { bubbles: true })); cb.dispatchEvent(new Event('change', { bubbles: true })); }
+      if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new MouseEvent('click', { bubbles: true })); cb.dispatchEvent(new Event('change', { bubbles: true })); }
       await sleep(100);
       return { ok: cb.checked, via: 'input', error: cb.checked ? undefined : 'checkbox did not become checked' };
     }
