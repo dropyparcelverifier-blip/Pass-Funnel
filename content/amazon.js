@@ -76,7 +76,7 @@
       document.querySelector(
         '#productTitle, #title, #titleSection, #dp, #ppd, #centerCol #title, [data-feature-name="title"], ' +
         '#add-to-cart-button, #buy-now-button, #buybox, #desktop_buybox, #feature-bullets, ' +
-        '#dp-container, #averageCustomerReviews, [data-asin][data-component-type="s-product-image"]'
+        '#dp-container, #averageCustomerReviews'
       ) ||
       (DP_RE.test(url) && document.querySelector('#nav-belt') && bodyText.length > 1500)
     ) {
