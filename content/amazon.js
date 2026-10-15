@@ -104,10 +104,12 @@
           if (!data || data['@type'] !== 'Product') continue;
           if (data.name) result.title = clip(data.name, 500);
           if (data.brand?.name) result.brand = clip(data.brand.name, 100);
-          const offer = data.offers || (Array.isArray(data.offers) ? data.offers[0] : null);
+          const offers = data.offers;
+          const offer = Array.isArray(offers) ? offers[0] : offers;
           if (offer) {
             const o = Array.isArray(offer) ? offer[0] : offer;
-            if (o.price != null) result.price = parseFloat(o.price);
+            const p = parseFloat(o.price);
+            if (p > 0 && Number.isFinite(p)) result.price = p;
             if (o.priceCurrency) result.currency = /INR|₹/i.test(o.priceCurrency) ? 'INR' : /USD|\$/i.test(o.priceCurrency) ? 'USD' : o.priceCurrency;
           }
         } catch { /* malformed json-ld block */ }
