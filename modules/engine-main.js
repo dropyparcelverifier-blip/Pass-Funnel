@@ -151,7 +151,7 @@ export function createMainEngine(ctx) {
       let r;
       for (let i = 0; i < 3; i++) {
         r = await tab.rpc({ type: 'DETECT_PAGE_TYPE' });
-        if (r?.pageType === PAGE.CAPTCHA) break;
+        if (r?.pageType === PAGE.CAPTCHA || r?.pageType === PAGE.RATE_LIMITED || r?.pageType === PAGE.BLOCKED) break;
         if (r?.pageType && r.pageType !== PAGE.OTHER) break;  // decisive
         await sleep(700); // 'other' → maybe still loading; wait and re-check
       }
@@ -169,6 +169,38 @@ export function createMainEngine(ctx) {
         log('CAPTCHA cleared — resuming.', 'ok');
         await sleep(800);
         continue; // re-detect the now-cleared page
+      }
+      if (r?.pageType === PAGE.RATE_LIMITED) {
+        throttle.onRateLimit();
+        const backoff = rand(8000, 15000) * throttle.multiplier;
+        log(`Rate-limited by Amazon — backing off ${Math.round(backoff / 1000)}s (throttle ×${throttle.multiplier.toFixed(1)})`, 'warn');
+        s.status = `Rate-limited — cooling down ${Math.round(backoff / 1000)}s`;
+        emit();
+        await sleep(backoff);
+        checkControl();
+        try { await tab.reload(); } catch {}
+        await sleep(2000);
+        continue;
+      }
+      if (r?.pageType === PAGE.BLOCKED) {
+        throttle.onBlock();
+        const backoff = rand(15000, 30000) * throttle.multiplier;
+        log(`Soft-blocked by Amazon — backing off ${Math.round(backoff / 1000)}s (throttle ×${throttle.multiplier.toFixed(1)})`, 'warn');
+        s.status = `Blocked — cooling down ${Math.round(backoff / 1000)}s`;
+        emit();
+        await sleep(backoff);
+        checkControl();
+        try { await tab.reload(); } catch {}
+        await sleep(3000);
+        const r2 = await tab.rpc({ type: 'DETECT_PAGE_TYPE' });
+        if (r2?.pageType === PAGE.BLOCKED || r2?.pageType === PAGE.RATE_LIMITED) {
+          log('Still blocked after backoff — flagging row', 'warn');
+          return r2.pageType;
+        }
+        continue;
+      }
+      if (r?.pageType === PAGE.PRODUCT || r?.pageType === PAGE.NOT_FOUND || r?.pageType === PAGE.UNAVAILABLE) {
+        throttle.onSuccess();
       }
       return r?.pageType || PAGE.OTHER;
     }
