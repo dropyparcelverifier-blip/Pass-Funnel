@@ -797,7 +797,9 @@
   // Uncheck every selected row checkbox (and select-all) so only the target row
   // gets ticked — the toolbar actions operate on ALL checked rows.
   function clearAllChecks() {
-    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    const grid = detectGrid();
+    const container = grid?.el || document;
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
       if (cb.checked) { try { cb.click(); } catch {} if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change', { bubbles: true })); } }
     });
   }
