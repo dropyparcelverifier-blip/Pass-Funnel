@@ -301,7 +301,22 @@ export function createMainEngine(ctx) {
     await showDash();
     setStep('funnel', asin);
     await verifyAndFixFunnel(rec, settings);
-    await sleep(300); // let the row re-render settle after a funnel change
+    if (rec.funnelCorrected) {
+      await sleep(800);
+      let rowVisible = (await ctx.sendToDashboard({ type: 'READ_ROW_FIELDS', asin }))?.ok;
+      if (!rowVisible) {
+        await sleep(1500);
+        rowVisible = (await ctx.sendToDashboard({ type: 'READ_ROW_FIELDS', asin }))?.ok;
+      }
+      if (!rowVisible) {
+        rec.rowLost = true;
+        rec.flags.push('row moved off-page after funnel change — skipping field writes');
+        log(`${asin}: row not found after funnel ${rec.funnelCorrected} — skipping writes`, 'warn', asin);
+        finalizeRecord(rec); return 'row_lost';
+      }
+    } else {
+      await sleep(300);
+    }
 
     // 4) weight + category via ONE combined LLM call (reliable; no 2nd-call bleed)
     setStep('analyze (weight+category)', asin);
