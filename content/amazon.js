@@ -561,7 +561,7 @@
     grab(/(\d+(?:\.\d+)?)\s*(?:w|watt)\b/, 'watt');
     grab(/(\d+(?:\.\d+)?)\s*%/, 'percent');
     grab(/(?:pack|set|count|ct)\s*of\s*(\d+)/, 'pack');
-    grab(/(\d+)\s*[- ]?(?:pack|count|ct|pcs|pieces)\b/, 'pack');
+    if (!specs.pack) grab(/(\d+)\s*[- ]?(?:pack|count|ct|pcs|pieces)\b/, 'pack');
     return specs;
   }
 
