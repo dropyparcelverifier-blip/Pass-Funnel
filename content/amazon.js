@@ -524,7 +524,7 @@
       }
       const off = (card.querySelector('.a-price:not([data-a-strike]) .a-offscreen')?.textContent || '').trim();
       let priceValue = null, currency = '';
-      if (off) { currency = /₹|inr/i.test(off) ? 'INR' : /\$|usd/i.test(off) ? 'USD' : ''; const v = parseFloat(off.replace(/[^\d.]/g, '')); priceValue = Number.isFinite(v) ? Math.round(v * 100) / 100 : null; }
+      if (off) { currency = /₹|inr/i.test(off) ? 'INR' : /\$|usd/i.test(off) ? 'USD' : ''; const cleaned = off.split(/[-–]/)[0].replace(/[^\d.]/g, ''); const v = parseFloat(cleaned); priceValue = (Number.isFinite(v) && v > 0) ? Math.round(v * 100) / 100 : null; }
       let brand = '';
       for (const sel of ['.a-row .a-size-base.a-link-normal', '.puis-bold-weight-text', '.s-label-popover-default span']) {
         const t = (card.querySelector(sel)?.textContent || '').trim();
