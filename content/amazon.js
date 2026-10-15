@@ -47,11 +47,14 @@
 
     // Soft-blocked / access-denied — Amazon sometimes serves a near-empty
     // page or a "something went wrong" error that isn't a CAPTCHA or 404.
-    if (
-      (/something went wrong|unable to process your request|try again later/i.test(bodyText) && bodyText.length < 3000) ||
-      (/access denied|automated access|suspicious activity/i.test(bodyText) && !document.querySelector('form[action*="validateCaptcha"]'))
-    ) {
-      return 'blocked';
+    {
+      const hasProductShell = document.querySelector('#productTitle, #dp, #ppd, #centerCol, #dp-container');
+      if (
+        (!hasProductShell && /something went wrong|unable to process your request|try again later/i.test(bodyText) && bodyText.length < 3000) ||
+        (/access denied|automated access|suspicious activity/i.test(bodyText) && !document.querySelector('form[action*="validateCaptcha"]') && !hasProductShell)
+      ) {
+        return 'blocked';
+      }
     }
 
     // Dog / 404 page — STRONG signals only (checked before product so a 404
