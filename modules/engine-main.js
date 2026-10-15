@@ -259,6 +259,12 @@ export function createMainEngine(ctx) {
       s.counters.linkNf++; finalizeRecord(rec);
       log(`${asin}: ${why} → Link NF${settings.dryRun ? ' [dry-run]' : ''}`, 'ok', asin);
     };
+    if (pt === PAGE.RATE_LIMITED || pt === PAGE.BLOCKED) {
+      rec.branch = 'flagged'; rec.flags.push(`India page ${pt} — retry later`);
+      finalizeRecord(rec); s.counters.flagged++;
+      log(`${asin}: India ${pt} after recovery — flagged for retry`, 'warn', asin);
+      return 'flagged';
+    }
     if (pt !== PAGE.PRODUCT) {
       // India link not working → Link NF IMMEDIATELY. The India leg NEVER
       // title-searches (user rule 2026-06-11) — only the USA leg searches. Also
