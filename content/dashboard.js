@@ -343,7 +343,11 @@
     const { grid, row } = findRow(asin);
     if (!row) return { ok: false, error: `row not found for ASIN ${asin}` };
     const cell = cellForField(grid, row, 'category') || row.el;
-    const applied = () => norm(_catOf(cell)) === norm(category) || norm(_catOf(cell)).includes(norm(category));
+    const applied = () => {
+      const fr = findRow(asin);
+      const c = fr.row ? (cellForField(fr.grid, fr.row, 'category') || fr.row.el) : cell;
+      return norm(_catOf(c)) === norm(category) || norm(_catOf(c)).includes(norm(category));
+    };
 
     // 1) Native <select>.
     const sel = cell.querySelector('select');
