@@ -553,7 +553,7 @@
     const grab = (re, kind, mult = 1) => { const m = t.match(re); if (m) { const v = parseFloat(m[1].replace(',', '.')) * mult; if (Number.isFinite(v)) specs[kind] = v; } };
     grab(/(\d+(?:\.\d+)?)\s*(?:mg|milligram)/, 'mass_mg');
     grab(/(\d+(?:\.\d+)?)\s*(?:mcg|microgram)/, 'mass_mcg');
-    grab(/(\d+(?:\.\d+)?)\s*(?:g|gram|gm)\b/, 'mass_g');
+    grab(/(\d+(?:\.\d+)?)\s+(?:g|gram|gm)\b/, 'mass_g');
     grab(/(\d+(?:\.\d+)?)\s*(?:kg|kilogram)/, 'mass_kg');
     grab(/(\d+(?:\.\d+)?)\s*ml\b/, 'vol_ml');
     grab(/(\d+(?:\.\d+)?)\s*(?:l|litre|liter)\b/, 'vol_l');
