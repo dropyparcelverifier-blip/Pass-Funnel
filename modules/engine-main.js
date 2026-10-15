@@ -1244,6 +1244,7 @@ export function createMainEngine(ctx) {
     s.counters = { processed: 0, passed: 0, failed: 0, linkNf: 0, usaLinkNf: 0, flagged: 0 };
     s.status = 'Idle'; s.page = null; s.totalPages = null; s.currentAsin = null; s.step = '';
     s.paused = false; s.pausedByCaptcha = false; s.usZipSet = false;
+    throttle.reset();
     lastLoggedPage = null;
     await chrome.storage.local.remove([K.PROCESSED, K.COUNTERS, K.ROW_RECORDS, K.RUN_STATE]);
     emit();
@@ -1256,6 +1257,7 @@ export function createMainEngine(ctx) {
       status: s.status, currentAsin: s.currentAsin, step: s.step,
       page: s.page, totalPages: s.totalPages, queueRemaining: s.queue.length,
       counters: s.counters, processedCount: s.processed.size,
+      throttle: { multiplier: throttle.multiplier, consecutiveOk: throttle.consecutiveOk },
     };
   }
   function getRecords() { return Object.values(s.rowRecords); }
