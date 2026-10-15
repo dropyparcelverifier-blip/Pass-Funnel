@@ -123,10 +123,9 @@ export function createMainEngine(ctx) {
 
   // ---- throttled, retrying Amazon navigation --------------------------------
   async function loadAmazon(url, settings) {
-    await sleep(rand(settings.throttleMinMs, settings.throttleMaxMs));
+    const t = throttle.applyTo(settings.throttleMinMs, settings.throttleMaxMs);
+    await sleep(rand(t.min, t.max));
     checkControl();
-    // Bring the Amazon tab forward BEFORE the load so the user watches it open
-    // (India/USA), then again after so it wins over anything that stole focus.
     const show = settings.showWorkingTab !== false;
     if (show) { try { await tab.ensureTab(); await tab.bringToFront(); } catch {} }
     let r;
@@ -134,9 +133,10 @@ export function createMainEngine(ctx) {
       r = await tab.navigate(url, settings.pageTimeoutMs);
     } catch (e1) {
       log(`load failed (${e1.message}) — retrying once`, 'warn');
-      await sleep(rand(settings.throttleMinMs, settings.throttleMaxMs));
+      const t2 = throttle.applyTo(settings.throttleMinMs, settings.throttleMaxMs);
+      await sleep(rand(t2.min, t2.max));
       checkControl();
-      r = await tab.navigate(url, settings.pageTimeoutMs); // throws on 2nd failure -> row flagged by caller
+      r = await tab.navigate(url, settings.pageTimeoutMs);
     }
     if (show) { try { await tab.bringToFront(); } catch {} }
     return r;
