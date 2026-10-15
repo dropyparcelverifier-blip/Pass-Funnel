@@ -1252,9 +1252,9 @@ export function createMainEngine(ctx) {
   async function stop() {
     s.stopRequested = true; s.pauseRequested = false;
     s.active = false;        // intentional stop — do NOT auto-resume on restart
-    highlight(null);  // clear the row highlight
-    await tab.closeTab();
-    await closeLlmTab();
+    try { highlight(null); } catch {}
+    try { await tab.closeTab(); } catch {}
+    try { await closeLlmTab(); } catch {}
     s.running = false; s.status = 'Stopped';
     persist(); emit();
     return { ok: true };
