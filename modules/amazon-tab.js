@@ -94,6 +94,13 @@ export async function waitReady(timeoutMs) {
   throw new Error('content script not ready');
 }
 
+// Reload the managed tab in place (for recovery after rate-limit/block).
+export async function reload() {
+  if (tabId == null) throw new Error('no amazon tab');
+  await chrome.tabs.reload(tabId);
+  await waitReady(15000);
+}
+
 // Send an RPC to the managed Amazon tab.
 export async function rpc(message) {
   if (tabId == null) throw new Error('no amazon tab');
