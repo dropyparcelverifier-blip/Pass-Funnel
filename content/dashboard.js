@@ -289,6 +289,7 @@
   function valuesMatch(actual, intended) {
     const a = String(actual == null ? '' : actual).trim();
     const b = String(intended == null ? '' : intended).trim();
+    if (!a && !b) return true;
     if (!a) return false;
     if (a === b) return true;
     const numeric = /^[\d.,]+$/.test(b.replace(/[₹$\s]/g, ''));   // bare number (not a URL)
