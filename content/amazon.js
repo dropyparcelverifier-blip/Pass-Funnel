@@ -682,7 +682,7 @@
       try {
         const data = scrapeProduct();
         log(`scrape ${data.asin || '?'}: bsr=${data.bsrPrimary} weight=${data.weightGrams}g ` +
-            `price=${data.currency}${data.priceValue}`, 'ok');
+            `price=${data.currency}${data.priceValue}${data._embeddedUsed ? ' (embedded JSON filled gaps)' : ''}`, 'ok');
         if (data.priceValue == null && data.priceDebugHtml) {
           log(`${data.asin || '?'}: PRICE PARSE FAILED — the buybox shows a price we missed. Copy & send this so I can lock it: ${String(data.priceDebugHtml).slice(0, 800)}`, 'warn');
         }
