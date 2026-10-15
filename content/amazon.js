@@ -88,6 +88,53 @@
     return 'other';
   }
 
+  // =================== Embedded JSON extraction ============================
+  // Amazon embeds structured product data in <script> tags — more stable than
+  // DOM selectors across layout changes. We mine ld+json and state objects for
+  // price, name, brand, and weight before falling back to the DOM scrapers.
+  function extractEmbeddedJson() {
+    const result = { title: null, price: null, currency: null, brand: null, weight: null, asin: null };
+    try {
+      // 1) ld+json (schema.org Product) — most reliable structured source.
+      const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const s of ldScripts) {
+        try {
+          let data = JSON.parse(s.textContent);
+          if (Array.isArray(data)) data = data.find(d => d['@type'] === 'Product') || data[0];
+          if (!data || data['@type'] !== 'Product') continue;
+          if (data.name) result.title = clip(data.name, 500);
+          if (data.brand?.name) result.brand = clip(data.brand.name, 100);
+          const offer = data.offers || (Array.isArray(data.offers) ? data.offers[0] : null);
+          if (offer) {
+            const o = Array.isArray(offer) ? offer[0] : offer;
+            if (o.price != null) result.price = parseFloat(o.price);
+            if (o.priceCurrency) result.currency = /INR|₹/i.test(o.priceCurrency) ? 'INR' : /USD|\$/i.test(o.priceCurrency) ? 'USD' : o.priceCurrency;
+          }
+        } catch { /* malformed json-ld block */ }
+      }
+      // 2) Embedded state blobs (twister, buybox data, detail attrs).
+      //    Amazon sometimes embeds item-weight in a JS object like
+      //    "item_weight":{"value":"200","unit":"grams"} inside inline scripts.
+      const scripts = document.querySelectorAll('script:not([src])');
+      for (const s of scripts) {
+        const t = s.textContent || '';
+        if (t.length < 50 || t.length > 500000) continue;
+        // Weight from embedded data attributes.
+        const wm = t.match(/"(?:item_weight|itemWeight|package_weight)":\s*\{[^}]*"value"\s*:\s*"?([\d.,]+)"?\s*,\s*"unit"\s*:\s*"([^"]+)"/i);
+        if (wm && !result.weight) {
+          const g = weightToGrams(`${wm[1]} ${wm[2]}`);
+          if (g != null) result.weight = g;
+        }
+        // ASIN from embedded data.
+        if (!result.asin) {
+          const am = t.match(/"asin"\s*:\s*"([A-Z0-9]{10})"/i) || t.match(/"ASIN"\s*:\s*"([A-Z0-9]{10})"/);
+          if (am) result.asin = am[1];
+        }
+      }
+    } catch { /* embedded extraction is best-effort */ }
+    return result;
+  }
+
   // ============================== Scraping ==================================
   function scrapeProduct() {
     const title = clip(document.querySelector('#productTitle')?.textContent, 500);
@@ -99,11 +146,11 @@
       title,
       asin,
       bsrPrimary: parseBsr(pairs),
-      bsrPrimaryCategory: parseBsrCategory(pairs),  // category of the primary "#N in <Cat>" — picks the funnel threshold
-      categoryPath: cat.path,          // breadcrumb array, e.g. ['Electronics','GPS…','Golf Course GPS Units']
-      categoryText: cat.text,          // joined breadcrumb + rank categories
-      ...parseWeight(pairs),           // { weightGrams, weightRaw, weightSource:'amazon'|null }
-      ...parsePrice(),                 // { priceValue, currency, priceRaw }
+      bsrPrimaryCategory: parseBsrCategory(pairs),
+      categoryPath: cat.path,
+      categoryText: cat.text,
+      ...parseWeight(pairs),
+      ...parsePrice(),
       canonicalUrl: getCanonicalUrl(asin),
     };
   }
