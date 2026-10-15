@@ -1231,7 +1231,10 @@ export function createMainEngine(ctx) {
   }
   async function resume() {
     await hydrated;
-    if (s.running) return { ok: false, error: 'already running' };
+    if (s.running || s.loopActive) {
+      if (s.loopActive) await stopAndWait();
+      else return { ok: false, error: 'already running' };
+    }
     s.pausedByCaptcha = false; s.paused = false; s.pauseRequested = false; s.stopRequested = false;
     s.active = true;         // in-flight again (also covers auto-resume after a crash)
     const settings = await getSettings();
