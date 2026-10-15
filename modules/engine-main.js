@@ -532,11 +532,12 @@ export function createMainEngine(ctx) {
       try {
         await loadAmazon(usaUrl, settings);
         const pt = await detect();
-        if (pt === PAGE.PRODUCT) {
+        if (pt === PAGE.RATE_LIMITED || pt === PAGE.BLOCKED) {
+          rec.flags.push(`USA page ${pt} — USD may be missing`);
+          log(`${asin}: USA ${pt} after recovery — skipping USA leg`, 'warn', asin);
+        } else if (pt === PAGE.PRODUCT) {
           const usa = await scrapeUsa(usaUrl, settings);
           const loaded = (usa.asin || '').toUpperCase();
-          // amazon.com redirects a dead ASIN to a DIFFERENT product — don't trust
-          // that price/link; treat as not-found and search by title instead.
           if (loaded && loaded !== asin.toUpperCase()) {
             log(`${asin}: USA .com showed a DIFFERENT product (${loaded}) — searching .com by title`, 'warn', asin);
           } else {
@@ -547,7 +548,6 @@ export function createMainEngine(ctx) {
             return 'ok';
           }
         } else {
-          // dead USA link -> fall through to search branch
           log(`${asin}: USA link ${pt} → searching .com by title`, 'info', asin);
         }
       } catch (e) {
