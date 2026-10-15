@@ -150,6 +150,8 @@ export function createMainEngine(ctx) {
   // tab to the front and AUTO-RESUME: poll until the user clears it, then carry
   // on — no manual Resume needed.
   async function detect() {
+    let recoveryAttempts = 0;
+    const MAX_RECOVERY = 3;
     for (;;) {
       let r;
       for (let i = 0; i < 3; i++) {
@@ -174,9 +176,14 @@ export function createMainEngine(ctx) {
         continue; // re-detect the now-cleared page
       }
       if (r?.pageType === PAGE.RATE_LIMITED) {
+        recoveryAttempts++;
+        if (recoveryAttempts > MAX_RECOVERY) {
+          log(`Rate-limited ${recoveryAttempts} times — giving up`, 'warn');
+          return PAGE.RATE_LIMITED;
+        }
         throttle.onRateLimit();
         const backoff = rand(8000, 15000) * throttle.multiplier;
-        log(`Rate-limited by Amazon — backing off ${Math.round(backoff / 1000)}s (throttle ×${throttle.multiplier.toFixed(1)})`, 'warn');
+        log(`Rate-limited by Amazon — backing off ${Math.round(backoff / 1000)}s (attempt ${recoveryAttempts}/${MAX_RECOVERY}, throttle ×${throttle.multiplier.toFixed(1)})`, 'warn');
         s.status = `Rate-limited — cooling down ${Math.round(backoff / 1000)}s`;
         emit();
         await sleep(backoff);
