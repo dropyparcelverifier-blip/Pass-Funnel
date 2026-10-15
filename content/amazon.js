@@ -137,11 +137,23 @@
 
   // ============================== Scraping ==================================
   function scrapeProduct() {
-    const title = clip(document.querySelector('#productTitle')?.textContent, 500);
+    const embedded = extractEmbeddedJson();
+    const title = clip(document.querySelector('#productTitle')?.textContent, 500) || embedded.title || '';
     const pairs = getDetailPairs();
-    const asin = extractAsin();
+    const asin = extractAsin() || embedded.asin || '';
 
     const cat = getCategoryHints(pairs);
+    const domWeight = parseWeight(pairs);
+    const domPrice = parsePrice();
+    const weightGrams = domWeight.weightGrams ?? embedded.weight ?? null;
+    const weightRaw = domWeight.weightRaw || (embedded.weight != null ? `${embedded.weight}g (embedded)` : '');
+    const weightSource = domWeight.weightSource || (embedded.weight != null ? 'amazon-embedded' : null);
+    let priceValue = domPrice.priceValue;
+    let currency = domPrice.currency;
+    if (priceValue == null && embedded.price != null && Number.isFinite(embedded.price)) {
+      priceValue = Math.round(embedded.price * 100) / 100;
+      currency = embedded.currency || currency;
+    }
     return {
       title,
       asin,
@@ -149,9 +161,12 @@
       bsrPrimaryCategory: parseBsrCategory(pairs),
       categoryPath: cat.path,
       categoryText: cat.text,
-      ...parseWeight(pairs),
-      ...parsePrice(),
+      weightGrams, weightRaw, weightSource,
+      priceValue, currency,
+      priceRaw: domPrice.priceRaw || (priceValue != null ? `${currency}${priceValue} (embedded)` : ''),
+      priceDebugHtml: domPrice.priceDebugHtml,
       canonicalUrl: getCanonicalUrl(asin),
+      _embeddedUsed: (domWeight.weightGrams == null && embedded.weight != null) || (domPrice.priceValue == null && embedded.price != null),
     };
   }
 
