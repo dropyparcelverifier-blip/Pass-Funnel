@@ -35,6 +35,26 @@
       return 'captcha';
     }
 
+    // Rate-limit / throttle page — Amazon returns a 503 with a "please try
+    // again" message when too many requests come in. Distinct from CAPTCHA
+    // (no puzzle to solve — just needs a cooldown and retry).
+    if (
+      /throttle|rate.?limit|service.?unavailable|too many requests|slow down/i.test(bodyText) ||
+      (/503/.test(document.title) && bodyText.length < 2000) ||
+      /sorry,? we just need to make sure you.?re not a robot/i.test(bodyText)
+    ) {
+      return 'rate_limited';
+    }
+
+    // Soft-blocked / access-denied — Amazon sometimes serves a near-empty
+    // page or a "something went wrong" error that isn't a CAPTCHA or 404.
+    if (
+      (/something went wrong|unable to process your request|try again later/i.test(bodyText) && bodyText.length < 3000) ||
+      (/access denied|automated access|suspicious activity/i.test(bodyText) && !document.querySelector('form[action*="validateCaptcha"]'))
+    ) {
+      return 'blocked';
+    }
+
     // Dog / 404 page — STRONG signals only (checked before product so a 404
     // never reads as product, but product detection is broad to avoid false NF).
     if (
