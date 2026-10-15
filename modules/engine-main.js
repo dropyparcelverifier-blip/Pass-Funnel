@@ -21,35 +21,38 @@ const rand = (a, b) => Math.round(a + Math.random() * (b - a));
 const IN_ORIGIN = 'https://www.amazon.in';
 const COM_ORIGIN = 'https://www.amazon.com';
 
-const throttle = {
-  multiplier: 1.0,
-  consecutiveOk: 0,
-  consecutiveFail: 0,
-  applyTo(minMs, maxMs) {
-    const m = Math.max(0.6, Math.min(this.multiplier, 4.0));
-    return { min: Math.round(minMs * m), max: Math.round(maxMs * m) };
-  },
-  onSuccess() {
-    this.consecutiveOk++;
-    this.consecutiveFail = 0;
-    if (this.consecutiveOk >= 5 && this.multiplier > 0.6) {
-      this.multiplier = Math.max(0.6, this.multiplier * 0.9);
-    }
-  },
-  onBlock() {
-    this.consecutiveFail++;
-    this.consecutiveOk = 0;
-    this.multiplier = Math.min(4.0, this.multiplier * (1.5 + 0.5 * this.consecutiveFail));
-  },
-  onRateLimit() {
-    this.consecutiveFail++;
-    this.consecutiveOk = 0;
-    this.multiplier = Math.min(4.0, this.multiplier * 2.0);
-  },
-  reset() { this.multiplier = 1.0; this.consecutiveOk = 0; this.consecutiveFail = 0; },
-};
+function createThrottle() {
+  return {
+    multiplier: 1.0,
+    consecutiveOk: 0,
+    consecutiveFail: 0,
+    applyTo(minMs, maxMs) {
+      const m = Math.max(0.6, Math.min(this.multiplier, 4.0));
+      return { min: Math.round(minMs * m), max: Math.round(maxMs * m) };
+    },
+    onSuccess() {
+      this.consecutiveOk++;
+      this.consecutiveFail = 0;
+      if (this.consecutiveOk >= 5 && this.multiplier > 0.6) {
+        this.multiplier = Math.max(0.6, this.multiplier * 0.9);
+      }
+    },
+    onBlock() {
+      this.consecutiveFail++;
+      this.consecutiveOk = 0;
+      this.multiplier = Math.min(4.0, this.multiplier * (1.5 + 0.5 * this.consecutiveFail));
+    },
+    onRateLimit() {
+      this.consecutiveFail++;
+      this.consecutiveOk = 0;
+      this.multiplier = Math.min(4.0, this.multiplier * 2.0);
+    },
+    reset() { this.multiplier = 1.0; this.consecutiveOk = 0; this.consecutiveFail = 0; },
+  };
+}
 
 export function createMainEngine(ctx) {
+  const throttle = createThrottle();
   // ctx: { log(text,kind,asin), emit(payload), sendToDashboard(msg) }
   const s = {
     running: false, paused: false, pausedByCaptcha: false,
