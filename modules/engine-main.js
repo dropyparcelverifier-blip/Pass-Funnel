@@ -245,7 +245,7 @@ export function createMainEngine(ctx) {
     //    page isn't a real product, the row goes to Link NF below.
     let indiaUrl = row.indiaUrl || (row.asin ? `${IN_ORIGIN}/dp/${row.asin}` : '');
     if (!indiaUrl) {
-      rec.branch = 'flagged'; rec.flags.push('no India link in row'); finalizeRecord(rec); s.counters.flagged++;
+      rec.branch = 'flagged'; rec.flags.push('no India link in row'); finalizeRecord(rec);
       log(`${asin}: no India link — flagged`, 'warn', asin); return 'flagged';
     }
     if (/amazon\.com/i.test(hostOf(indiaUrl))) {
@@ -257,7 +257,7 @@ export function createMainEngine(ctx) {
       // Not an Amazon link at all (e.g. junk/test rows) — fall back to
       // amazon.in/dp/ASIN so it resolves fast instead of hanging on a dead host.
       if (row.asin) { indiaUrl = `${IN_ORIGIN}/dp/${row.asin}`; }
-      else { rec.branch = 'flagged'; rec.flags.push('India link is not an Amazon URL'); finalizeRecord(rec); s.counters.flagged++; log(`${asin}: India link not Amazon & no ASIN — flagged`, 'warn', asin); return 'flagged'; }
+      else { rec.branch = 'flagged'; rec.flags.push('India link is not an Amazon URL'); finalizeRecord(rec); log(`${asin}: India link not Amazon & no ASIN — flagged`, 'warn', asin); return 'flagged'; }
     }
     rec.indiaUrlUsed = indiaUrl;
     setStep('open India link', asin);
@@ -272,7 +272,7 @@ export function createMainEngine(ctx) {
     };
     if (pt === PAGE.RATE_LIMITED || pt === PAGE.BLOCKED) {
       rec.branch = 'flagged'; rec.flags.push(`India page ${pt} — retry later`);
-      finalizeRecord(rec); s.counters.flagged++;
+      finalizeRecord(rec);
       log(`${asin}: India ${pt} after recovery — flagged for retry`, 'warn', asin);
       return 'flagged';
     }
