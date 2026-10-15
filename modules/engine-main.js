@@ -1051,7 +1051,7 @@ export function createMainEngine(ctx) {
       if (cur == null || String(cur).trim() === '') return false;
       const a = String(cur).trim();
       if (f === 'weight' || f === 'usd' || f === 'inr') return numMatch(a, want[f]);
-      if (f === 'sourceLink') { const w = String(want[f]); return a === w || a.includes(asin) || w.includes(a) || a.includes(w); }
+      if (f === 'sourceLink') { const w = String(want[f]); return a === w || (a.includes(asin) && a.length > 20) || (a.includes(w) && a.length >= w.length * 0.9); }
       return a === String(want[f]);
     };
     const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
