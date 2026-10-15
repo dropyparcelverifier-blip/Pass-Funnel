@@ -486,11 +486,12 @@
       if (opt) {
         // click the option robustly, then check immediately + after a settle
         opt.click(); realClick(opt); await sleep(150);
-        const fast = (findRow(asin).row && cellForField(findRow(asin).grid, findRow(asin).row, 'funnel'));
         await sleep(450);
       }
       const fr = findRow(asin); if (fr.row) curCell = cellForField(fr.grid, fr.row, 'funnel') || curCell;
     }
+    const fresh = findRow(asin);
+    if (fresh.row) curCell = cellForField(fresh.grid, fresh.row, 'funnel') || curCell;
     const now = _funnelOf(curCell);
     return {
       ok: now === funnel, current, changed: now === funnel && now !== current, via: 'funnel-menu',
