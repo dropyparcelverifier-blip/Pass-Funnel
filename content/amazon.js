@@ -14,6 +14,7 @@
   window.__davAmazonReady = true;
 
   const clip = (s, n) => (s == null ? '' : String(s)).replace(/\s+/g, ' ').trim().slice(0, n || 100000);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const DP_RE = /\/(?:dp|gp\/product|d|product)\/([A-Z0-9]{10})/i;
 
   function log(text, kind) {
