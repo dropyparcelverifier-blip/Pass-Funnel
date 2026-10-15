@@ -40,8 +40,7 @@
     // (no puzzle to solve — just needs a cooldown and retry).
     if (
       /throttle|rate.?limit|service.?unavailable|too many requests|slow down/i.test(bodyText) ||
-      (/503/.test(document.title) && bodyText.length < 2000) ||
-      /sorry,? we just need to make sure you.?re not a robot/i.test(bodyText)
+      (/503/.test(document.title) && bodyText.length < 2000)
     ) {
       return 'rate_limited';
     }
