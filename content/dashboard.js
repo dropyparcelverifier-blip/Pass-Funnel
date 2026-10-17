@@ -806,10 +806,8 @@
   }
   // Find a "Move Pass"/"Move Fail" element even if currently hidden — last resort.
   function findMovePassAnyVisibility(row) {
-    const inRow = row && Array.from(row.el.querySelectorAll('button, [role="button"], a'))
-      .find(b => MOVE_RE.test(clip(b.textContent || b.getAttribute('aria-label'), 30)));
-    if (inRow) return inRow;
-    return Array.from(document.querySelectorAll('button, [role="button"], a'))
+    if (!row) return null;
+    return Array.from(row.el.querySelectorAll('button, [role="button"], a'))
       .find(b => MOVE_RE.test(clip(b.textContent || b.getAttribute('aria-label'), 30))) || null;
   }
   function tabKey(el) {
