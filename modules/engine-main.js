@@ -1129,10 +1129,11 @@ export function createMainEngine(ctx) {
     if (s.loopActive) return;
     s.loopActive = true;
     const myReset = s.resetSeq;
-    const settings = await getSettings();
+    let settings = await getSettings();
     await syncWorkingWindow();   // put run tabs in the dashboard's window (re-checked per row too)
     try {
       while (!s.stopRequested && !s.pauseRequested && !s.pausedByCaptcha) {
+        settings = await getSettings();
         const rows = await readPage();
         const pending = rows.filter(r => r.asin && !s.processed.has(r.asin));
         const stayed = rows.filter(r => r.asin && s.processed.has(r.asin)).length;   // worked but left in Main File
