@@ -121,8 +121,10 @@ async function autoResumeIfNeeded(trigger) {
   if (autoResumeDone) return; autoResumeDone = true;
   try {
     await coldStart; await passEngine.hydrated; await mainEngine.hydrated;
-    const eng = activeEngine();
-    if (!eng.wantsResume()) return;
+    const eng = mainEngine.wantsResume() ? mainEngine
+              : passEngine.wantsResume() ? passEngine
+              : null;
+    if (!eng) return;
     pushLog(`Auto-resume (${trigger}): a run was interrupted — waiting for the dashboard tab…`, 'info');
     let tab = null;
     for (let i = 0; i < 90; i++) { tab = await getDashboardTab(); if (tab?.id) break; await new Promise(r => setTimeout(r, 1000)); }
