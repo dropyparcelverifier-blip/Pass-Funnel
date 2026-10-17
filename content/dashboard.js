@@ -769,7 +769,14 @@
     return Array.from(document.querySelectorAll('button, [role="button"], a'))
       .find(b => MOVE_RE.test(clip(b.textContent || b.getAttribute('aria-label'), 30)) && isVisible(b)) || null;
   }
-  function isVisible(el) { return !!(el && el.offsetParent !== null); }
+  function isVisible(el) {
+    if (!el) return false;
+    if (el.offsetParent !== null) return true;
+    const s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden') return false;
+    if (s.position === 'fixed' || s.position === 'sticky') return true;
+    return false;
+  }
   // Hover an element using REAL coordinates at its center — needed so a
   // framework's onMouseEnter/onMouseOver actually fires and renders row actions.
   function hoverEl(el) {
