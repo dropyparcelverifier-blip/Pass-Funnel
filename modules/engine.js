@@ -396,8 +396,11 @@ export function createEngine(ctx) {
     rec.bsr = bsr; rec.bsrCategory = bsrCat; rec.thresholdKey = key; rec.threshold = threshold;
     rec.funnel = funnel; rec.categoryMatched = matched;
 
-    const inr = (india.currency === 'INR' && Number.isFinite(india.priceValue)) ? india.priceValue
-              : (Number.isFinite(india.priceValue) ? india.priceValue : null);
+    let inr = null;
+    if (Number.isFinite(india.priceValue) && india.priceValue > 0) {
+      inr = india.priceValue;
+      if (india.currency && india.currency !== 'INR') rec.flags.push(`INR price was ${india.currency} (verify)`);
+    }
     const usd = (usa.currency === 'USD' && Number.isFinite(usa.priceValue)) ? usa.priceValue : null;
     const weight = Number.isFinite(india.weightGrams) ? india.weightGrams : null;
     const category = bsrCat || bcRoot || '';
