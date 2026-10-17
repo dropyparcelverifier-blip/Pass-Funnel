@@ -100,6 +100,7 @@ export function remarkText(bsr, bsrCategory) {
 // (the engine then falls back to a fuzzy match on the raw text, else flags it).
 // ---------------------------------------------------------------------------
 const CATEGORY_MAP = [
+  [/kitchen|cookware|dinnerware|tableware/i,'Kitchen - Other Products'],
   [/home\s*&?\s*kitchen/i,                 'Home - Other Products'],
   [/\bbeaut/i,                             'Beauty - Other Products'],
   [/health|personal care|household|wellness|nutrition|supplement|vitamin/i, 'Health - Other Products'],
@@ -139,7 +140,6 @@ const CATEGORY_MAP = [
   [/lawn|garden|patio/i,                   'Lawn Garden - Other Products'],
   [/home improvement|hardware|\btools?\b/i,'Home Improvement - Other Products'],
   [/furniture/i,                           'Furniture - Other Products'],
-  [/kitchen|cookware|dinnerware|tableware/i,'Kitchen - Other Products'],
   [/industrial|scientific|business/i,      'Business Industrial - Other Products'],
   [/mattress/i,                            'Mattresses'],
   [/bedsheet|bed\s*sheet|bedding|blanket|duvet|comforter/i, 'Bedsheets Blankets Covers'],
