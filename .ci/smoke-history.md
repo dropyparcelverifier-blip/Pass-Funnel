@@ -87,3 +87,5 @@
 2026-10-14T10:22:12Z — 42 passed, 0 failed (run 87)
 2026-10-15T10:07:43Z — 42 passed, 0 failed (run 88)
 2026-10-16T09:57:57Z — 42 passed, 0 failed (run 89)
+2026-10-17T09:31:01Z — 41 passed, 1 failed (run 90)
+    ✖ FUNCTIONAL: Amazon category → dashboard taxonomy mapping
