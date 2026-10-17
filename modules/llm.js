@@ -7,9 +7,11 @@
 // Provider-agnostic. User picked Gemini (2026-06-09); Anthropic + OpenAI paths
 // are included so the provider can be switched in Settings without code changes.
 
+const sanitize = (s) => String(s || '').replace(/["\\\n\r]/g, ' ').slice(0, 300).trim();
+
 export const weightPrompt = (title) =>
   `You estimate the shipped weight of a physical product from its title.\n` +
-  `Product title: "${title}"\n\n` +
+  `Product title: "${sanitize(title)}"\n\n` +
   `Return ONLY a JSON object, no prose, no markdown fences:\n` +
   `{"grams": <number>, "confidence": "high"|"medium"|"low"}\n` +
   `- grams = best estimate of the SHIPPED item weight in grams (include the container/packaging; ` +
@@ -19,9 +21,9 @@ export const weightPrompt = (title) =>
 // ACTUAL option list and must not match on incidental words in the title.
 export const categoryPrompt = (title, brand, options, amazonCategory) =>
   `You map a product to the closest category in a fixed dropdown list.\n` +
-  `Product title: "${title}"\n` +
-  `Brand: "${brand || 'unknown'}"\n` +
-  (amazonCategory ? `Amazon's own category breadcrumb for this product: "${amazonCategory}"\n` : '') +
+  `Product title: "${sanitize(title)}"\n` +
+  `Brand: "${sanitize(brand || 'unknown')}"\n` +
+  (amazonCategory ? `Amazon's own category breadcrumb for this product: "${sanitize(amazonCategory)}"\n` : '') +
   `\nChoose the SINGLE closest category from this EXACT list (copy the text verbatim):\n` +
   options.map((o, i) => `${i + 1}. ${o}`).join('\n') + `\n\n` +
   `Rules:\n` +
