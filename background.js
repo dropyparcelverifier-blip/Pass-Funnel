@@ -197,7 +197,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (action === 'startRun')  { coldStart.then(() => { runningEngine = activeEngine(); return runningEngine.start(); }).then(sendResponse);  return true; }
   if (action === 'pauseRun')  { sendResponse(activeEngine().pause()); return false; }
-  if (action === 'resumeRun') { coldStart.then(() => activeEngine().resume()).then(sendResponse); return true; }
+  if (action === 'resumeRun') { coldStart.then(() => { runningEngine = activeEngine(); return runningEngine.resume(); }).then(sendResponse); return true; }
   if (action === 'stopRun')   { activeEngine().stop().then(r => { runningEngine = null; return r; }).then(sendResponse); return true; }
   if (action === 'closeTabs') { activeEngine().closeTabs().then(sendResponse); return true; }
   if (action === 'resetRun')  {
