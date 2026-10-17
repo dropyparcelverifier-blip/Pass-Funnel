@@ -85,16 +85,18 @@ export function createMainEngine(ctx) {
   const hydrated = hydrate();
 
   let persistTimer = null;
-  function persist() {
+  function persist(immediate) {
     if (persistTimer) clearTimeout(persistTimer);
-    persistTimer = setTimeout(() => {
+    const doWrite = () => {
       chrome.storage.local.set({
         [K.PROCESSED]: Array.from(s.processed),
         [K.COUNTERS]: s.counters,
         [K.ROW_RECORDS]: s.rowRecords,
         [K.RUN_STATE]: { status: s.status, page: s.page, totalPages: s.totalPages, paused: s.paused, pausedByCaptcha: s.pausedByCaptcha, active: s.active },
       }).catch(() => {});
-    }, 300);
+    };
+    if (immediate) doWrite();
+    else persistTimer = setTimeout(doWrite, 300);
   }
 
   function emit(extra) {
@@ -1087,7 +1089,7 @@ export function createMainEngine(ctx) {
     s.processed.add(rec.asin);
     s.counters.processed = s.processed.size;
     s.rowRecords[rec.asin] = rec;
-    persist();
+    persist(true);
     emit();
   }
 
@@ -1225,7 +1227,7 @@ export function createMainEngine(ctx) {
     s.usZipSet = false;      // re-verify .com is USD at the start of each run
     lastLoggedPage = null;   // so the first page logs after a restart
     try { chrome.power?.requestKeepAwake?.('display'); } catch {}
-    persist();               // save active=true now so a crash in row 1 still resumes
+    persist(true);             // save active=true now so a crash in row 1 still resumes
     emit();
     runLoop();
     return { ok: true };
@@ -1240,7 +1242,7 @@ export function createMainEngine(ctx) {
     s.active = true;         // in-flight again (also covers auto-resume after a crash)
     const settings = await getSettings();
     s.running = true; s.status = settings.dryRun ? 'Running (dry-run)' : 'Running';
-    persist();               // save active=true promptly
+    persist(true);             // save active=true promptly
     emit();
     runLoop();
     return { ok: true };
@@ -1260,7 +1262,7 @@ export function createMainEngine(ctx) {
     try { await tab.closeTab(); } catch {}
     try { await closeLlmTab(); } catch {}
     s.running = false; s.status = 'Stopped';
-    persist(); emit();
+    persist(true); emit();
     return { ok: true };
   }
   async function reset() {
