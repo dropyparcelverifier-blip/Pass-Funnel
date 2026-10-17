@@ -59,16 +59,18 @@ export function createEngine(ctx) {
   const hydrated = hydrate();
 
   let persistTimer = null;
-  function persist() {
+  function persist(immediate) {
     if (persistTimer) clearTimeout(persistTimer);
-    persistTimer = setTimeout(() => {
+    const flush = () => {
       chrome.storage.local.set({
         [K.PROCESSED]: Array.from(s.processed),
         [K.COUNTERS]: s.counters,
         [K.ROW_RECORDS]: s.rowRecords,
         [K.RUN_STATE]: { status: s.status, page: s.page, totalPages: s.totalPages, paused: s.paused, pausedByCaptcha: s.pausedByCaptcha, active: s.active },
       }).catch(() => {});
-    }, 300);
+    };
+    if (immediate) { flush(); return; }
+    persistTimer = setTimeout(flush, 300);
   }
 
   function emit(extra) {
@@ -156,11 +158,11 @@ export function createEngine(ctx) {
     if (data.currency !== 'USD') {
       try {
         await tab.rpc({ type: 'SET_US_LOCATION', zip: settings.usZip || '10001' });
-        usLocationSet = true;
         try { await tab.waitReady(settings.pageTimeoutMs); } catch {}
         checkControl();
         await detect();
         data = (await tab.rpc({ type: 'SCRAPE_PRODUCT' }))?.data || {};
+        if (data.currency === 'USD') usLocationSet = true;
       } catch (e) { if (e.stopped) throw e; }
     }
     return data;
@@ -498,7 +500,7 @@ export function createEngine(ctx) {
     s.rowRecords[rec.asin] = rec;
     s.processed.add(rec.asin);
     s.counters.processed = s.processed.size;
-    persist(); emit();
+    persist(true); emit();
   }
 
   // ---- page reading (grid-wait) --------------------------------------------
@@ -596,7 +598,7 @@ export function createEngine(ctx) {
     s.active = true; s.running = true; s.status = settings.dryRun ? 'Running (dry-run)' : 'Running';
     lastLoggedPage = null;
     try { chrome.power?.requestKeepAwake?.('display'); } catch {}
-    persist(); emit(); runLoop();
+    persist(true); emit(); runLoop();
     return { ok: true };
   }
   async function resume() {
@@ -606,13 +608,13 @@ export function createEngine(ctx) {
     s.active = true;
     const settings = await getSettings();
     s.running = true; s.status = settings.dryRun ? 'Running (dry-run)' : 'Running';
-    persist(); emit(); runLoop();
+    persist(true); emit(); runLoop();
     return { ok: true };
   }
   function pause() {
     if (!s.running) return { ok: false, error: 'not running' };
-    s.pauseRequested = true; s.active = false; s.status = 'Pausing…';
-    persist(); emit();
+    s.pauseRequested = true; s.status = 'Pausing…';
+    persist(true); emit();
     return { ok: true };
   }
   async function stop() {
@@ -620,7 +622,7 @@ export function createEngine(ctx) {
     highlight(null);
     try { await tab.closeTab(); } catch {}
     s.running = false; s.status = 'Stopped';
-    persist(); emit();
+    persist(true); emit();
     return { ok: true };
   }
   async function reset() {
