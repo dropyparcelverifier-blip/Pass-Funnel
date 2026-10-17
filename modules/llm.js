@@ -122,11 +122,14 @@ function parseResult(text) {
   return { grams: Math.round(grams), confidence };
 }
 
+function apiSignal(ms = 30000) { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; }
+
 async function callGemini(apiKey, model, prompt) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: apiSignal(),
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0, responseMimeType: 'application/json' },
@@ -140,6 +143,7 @@ async function callGemini(apiKey, model, prompt) {
 async function callAnthropic(apiKey, model, prompt, maxTokens) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
+    signal: apiSignal(),
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
@@ -161,6 +165,7 @@ async function callAnthropic(apiKey, model, prompt, maxTokens) {
 async function callOpenAI(apiKey, model, prompt) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
+    signal: apiSignal(),
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
