@@ -276,9 +276,13 @@
     if (ce) {
       ce.focus();
       ce.textContent = String(value);
-      ce.dispatchEvent(new Event('input', { bubbles: true }));
+      ce.dispatchEvent(new InputEvent('input', { bubbles: true, data: String(value), inputType: 'insertText' }));
       ce.dispatchEvent(new Event('blur', { bubbles: true }));
-      return { ok: true, via: 'contenteditable' };
+      await sleep(200);
+      const fr = findRow(asin); if (!fr.row) return { ok: false, error: 'row disappeared after contenteditable write' };
+      const liveCell = cellForField(fr.grid, fr.row, field);
+      const stuck = liveCell && valuesMatch(clip(liveCell.textContent, 200), value);
+      return { ok: !!stuck, via: 'contenteditable', error: stuck ? undefined : `contenteditable value did not stick (now="${clip(liveCell?.textContent, 40)}")` };
     }
     return { ok: false, error: `no editable element in "${field}" cell — text="${clip(cell.textContent, 40)}"`, cellHtml: clip(cell.outerHTML, 900) };
   }
