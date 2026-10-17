@@ -80,5 +80,7 @@ async function ensure(url, timeoutMs, bringToFrontOnLogin) {
     } catch (e) { if (/NOT SIGNED IN/.test(e.message)) throw e; }
     await sleep(700);
   }
+  try { await chrome.tabs.remove(tabId); } catch {}
+  tabId = null;
   throw new Error(`${wantHost} not ready — make sure you are logged in (the tab was opened for you)`);
 }
