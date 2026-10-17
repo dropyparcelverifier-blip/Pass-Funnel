@@ -74,7 +74,7 @@ export const analyzePrompt = ({ title, brand, amazonCategory, options, needWeigh
 
 export function parseAnalyze(text, { needWeight, needCategory }) {
   if (!text) throw new Error('empty LLM response');
-  const m = text.match(/\{[\s\S]*\}/);
+  const m = text.match(/\{[\s\S]*?\}/);
   const o = JSON.parse(m ? m[0] : text);
   const conf = c => { c = String(c || 'low').toLowerCase(); return ['high', 'medium', 'low'].includes(c) ? c : 'low'; };
   const out = {};
@@ -91,7 +91,7 @@ export async function analyzeApi({ title, brand, amazonCategory, options, needWe
 
 export function parseCategoryResult(text) {
   if (!text) throw new Error('empty LLM response');
-  const m = text.match(/\{[\s\S]*\}/);
+  const m = text.match(/\{[\s\S]*?\}/);
   const obj = JSON.parse(m ? m[0] : text);
   const category = String(obj.category || '').trim();
   let confidence = String(obj.confidence || 'low').toLowerCase();
@@ -111,7 +111,7 @@ export function parseWeightResult(text) { return parseResult(text); }
 function parseResult(text) {
   if (!text) throw new Error('empty LLM response');
   // Tolerate stray fences/prose: grab the first {...} block.
-  const m = text.match(/\{[\s\S]*\}/);
+  const m = text.match(/\{[\s\S]*?\}/);
   const obj = JSON.parse(m ? m[0] : text);
   const grams = Number(obj.grams);
   if (!Number.isFinite(grams) || grams <= 0) throw new Error(`bad grams in LLM response: ${text.slice(0, 120)}`);
