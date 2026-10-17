@@ -109,7 +109,11 @@ const engineCtx = {
 };
 const passEngine = createEngine(engineCtx);
 const mainEngine = createMainEngine(engineCtx);
-function activeEngine() { return state.settings.mode === 'main' ? mainEngine : passEngine; }
+let runningEngine = null;
+function activeEngine() {
+  if (runningEngine && runningEngine.getStatus().running) return runningEngine;
+  return state.settings.mode === 'main' ? mainEngine : passEngine;
+}
 
 // ---- auto-resume after crash/restart ---------------------------------------
 let autoResumeDone = false;
@@ -189,10 +193,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (action === 'logFromContent') { pushLog(msg.text, msg.kind, msg.asin); sendResponse({ ok: true }); return false; }
 
-  if (action === 'startRun')  { coldStart.then(() => activeEngine().start()).then(sendResponse);  return true; }
+  if (action === 'startRun')  { coldStart.then(() => { runningEngine = activeEngine(); return runningEngine.start(); }).then(sendResponse);  return true; }
   if (action === 'pauseRun')  { sendResponse(activeEngine().pause()); return false; }
   if (action === 'resumeRun') { coldStart.then(() => activeEngine().resume()).then(sendResponse); return true; }
-  if (action === 'stopRun')   { activeEngine().stop().then(sendResponse); return true; }
+  if (action === 'stopRun')   { activeEngine().stop().then(r => { runningEngine = null; return r; }).then(sendResponse); return true; }
   if (action === 'closeTabs') { activeEngine().closeTabs().then(sendResponse); return true; }
   if (action === 'resetRun')  {
     coldStart.then(() => activeEngine().reset()).then(async (res) => {
