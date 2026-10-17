@@ -160,8 +160,8 @@ function fillSettings(st) {
 $('btnSaveSettings').addEventListener('click', async () => {
   const settings = {
     dashboardOrigin: $('setOrigin').value.trim(),
-    throttleMinMs: parseInt($('setThrottleMin').value, 10) || 2000,
-    throttleMaxMs: parseInt($('setThrottleMax').value, 10) || 5000,
+    throttleMinMs: Math.max(0, parseInt($('setThrottleMin').value, 10) || 2000),
+    throttleMaxMs: Math.max(0, parseInt($('setThrottleMax').value, 10) || 5000),
     writeRemark: $('setWriteRemark').checked,
     mode: currentMode,
     usZip: $('setUsZip').value.trim() || '10001',
@@ -174,6 +174,9 @@ $('btnSaveSettings').addEventListener('click', async () => {
     llmModel: $('setLlmModel').value.trim(),
     llmApiKey: $('setLlmApiKey').value.trim(),
   };
+  if (settings.throttleMinMs > settings.throttleMaxMs) {
+    [settings.throttleMinMs, settings.throttleMaxMs] = [settings.throttleMaxMs, settings.throttleMinMs];
+  }
   const r = await send({ action: 'saveSettings', settings });
   appendLog({ ts: Date.now(), text: r?.ok ? 'settings saved' : 'save failed', kind: r?.ok ? 'ok' : 'err' });
 });
