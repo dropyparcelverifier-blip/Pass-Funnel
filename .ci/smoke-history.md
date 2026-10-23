@@ -99,3 +99,5 @@
     ✖ FUNCTIONAL: Amazon category → dashboard taxonomy mapping
 2026-10-22T10:20:55Z — 41 passed, 1 failed (run 95)
     ✖ FUNCTIONAL: Amazon category → dashboard taxonomy mapping
+2026-10-23T10:16:21Z — 41 passed, 1 failed (run 96)
+    ✖ FUNCTIONAL: Amazon category → dashboard taxonomy mapping
